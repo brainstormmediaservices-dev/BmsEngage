@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { MoreVertical, Plus, Eye, Edit2, Trash2, FileText, Image as ImageIcon, Film, Layers, Calendar } from 'lucide-react';
+import { MoreVertical, Plus, Eye, Edit2, Trash2, FileText, Image as ImageIcon, Film, Layers, Calendar, Share2 } from 'lucide-react';
 import { MediaAsset } from '../../types/media';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -11,10 +11,11 @@ interface MediaAssetCardProps {
   onEdit: (asset: MediaAsset) => void;
   onAddVariant: (asset: MediaAsset) => void;
   onDelete: (asset: MediaAsset) => void;
+  onShare: (asset: MediaAsset) => void;
   key?: any;
 }
 
-export const MediaAssetCard = ({ asset, onView, onEdit, onAddVariant, onDelete }: MediaAssetCardProps) => {
+export const MediaAssetCard = ({ asset, onView, onEdit, onAddVariant, onDelete, onShare }: MediaAssetCardProps) => {
   const [showMenu, setShowMenu] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -164,6 +165,12 @@ export const MediaAssetCard = ({ asset, onView, onEdit, onAddVariant, onDelete }
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm text-primary hover:bg-primary/5 rounded-xl transition-colors font-bold"
                   >
                     <Calendar size={16} /> Schedule
+                  </button>
+                  <button 
+                    onClick={() => { onShare(asset); setShowMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-text-muted hover:text-text hover:bg-white/5 rounded-xl transition-colors"
+                  >
+                    <Share2 size={16} /> Share Asset
                   </button>
                   <button 
                     onClick={() => { onDelete(asset); setShowMenu(false); }}
