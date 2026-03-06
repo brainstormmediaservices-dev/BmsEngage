@@ -8,6 +8,7 @@ import { UploadMediaModal } from '../components/gallery/UploadMediaModal';
 import { AssetDetailModal } from '../components/gallery/AssetDetailModal';
 import { EditAssetModal } from '../components/gallery/EditAssetModal';
 import { DeleteAssetModal } from '../components/gallery/DeleteAssetModal';
+import { ShareAssetModal } from '../components/gallery/ShareAssetModal';
 import { useToast } from '../components/ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search } from 'lucide-react';
@@ -26,6 +27,7 @@ export default function GalleryPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [parentForVariant, setParentForVariant] = useState<MediaAsset | undefined>(undefined);
@@ -134,6 +136,7 @@ export default function GalleryPage() {
                 onEdit={(a) => { setSelectedAsset(a); setIsEditOpen(true); }}
                 onAddVariant={(a) => { setParentForVariant(a); setIsUploadOpen(true); }}
                 onDelete={(a) => { setSelectedAsset(a); setIsDeleteOpen(true); }}
+                onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
               />
             ))}
           </AnimatePresence>
@@ -173,6 +176,7 @@ export default function GalleryPage() {
         asset={selectedAsset}
         onEdit={(a) => { setIsDetailOpen(false); setSelectedAsset(a); setIsEditOpen(true); }}
         onDownload={handleDownload}
+        onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
       />
 
       <EditAssetModal 
@@ -191,6 +195,12 @@ export default function GalleryPage() {
         onConfirm={handleDelete}
         asset={selectedAsset}
         isLoading={isDeleting}
+      />
+
+      <ShareAssetModal 
+        isOpen={isShareOpen}
+        onClose={() => { setIsShareOpen(false); setSelectedAsset(null); }}
+        asset={selectedAsset}
       />
     </div>
   );

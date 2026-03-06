@@ -23,6 +23,7 @@ import {
 import { MediaAsset, MediaVariant } from '../../types/media';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { useToast } from '../ui/Toast';
 
 interface AssetDetailModalProps {
   isOpen: boolean;
@@ -30,11 +31,14 @@ interface AssetDetailModalProps {
   asset: MediaAsset | null;
   onEdit: (asset: MediaAsset) => void;
   onDownload: (asset: MediaAsset | MediaVariant) => void;
+  onShare: (asset: MediaAsset) => void;
 }
 
-export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onDownload }: AssetDetailModalProps) => {
+export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onDownload, onShare }: AssetDetailModalProps) => {
   const [showMetadata, setShowMetadata] = React.useState(true);
   const [activeVariant, setActiveVariant] = React.useState<MediaAsset | MediaVariant | null>(null);
+  const [isDownloading, setIsDownloading] = React.useState(false);
+  const { toast } = useToast();
 
   const sortedVariants = React.useMemo(() => {
     if (!asset) return [];
@@ -158,11 +162,35 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onDownload }:
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => onDownload(activeVariant)}>
-                  <Download size={16} />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={async () => {
+                    if (!activeVariant) return;
+                    setIsDownloading(true);
+                    try {
+                      await onDownload(activeVariant);
+                      toast('Download started successfully', 'success');
+                    } catch (err) {
+                      toast('Failed to prepare download', 'error');
+                    } finally {
+                      setIsDownloading(false);
+                    }
+                  }}
+                  disabled={isDownloading}
+                >
+                  {isDownloading ? (
+                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                      <Clock size={16} />
+                    </motion.div>
+                  ) : (
+                    <Download size={16} />
+                  )}
+                  <span className="ml-2 hidden sm:inline">Download</span>
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => asset && onShare(asset)}>
                   <Share2 size={16} />
+                  <span className="ml-2 hidden sm:inline">Share</span>
                 </Button>
               </div>
             </div>
