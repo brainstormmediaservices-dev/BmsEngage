@@ -113,7 +113,6 @@ export default function App() {
             {/* Superadmin Routes */}
             <Route element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}>
               <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/users" element={<AdminDashboard />} />
             </Route>
 
             {/* Fallback */}

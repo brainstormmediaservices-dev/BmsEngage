@@ -4,12 +4,13 @@ import {
   Users, CheckCircle2, XCircle, Clock, ShieldAlert, Search, RefreshCw,
   Trash2, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Shield,
   LayoutDashboard, Image as ImageIcon, Share2, PenTool, Calendar,
-  BarChart3, Bell, Settings as SettingsIcon,
+  BarChart3, Bell, Settings as SettingsIcon, Globe,
 } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
 import * as adminService from '../../services/adminService';
-import type { AdminUser, AdminStats } from '../../services/adminService';
+import type { AdminUser, AdminStats, NavFeatures } from '../../services/adminService';
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -90,15 +91,21 @@ export default function AdminDashboard() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // Global nav defaults
+  const [defaults, setDefaults] = useState<NavFeatures | null>(null);
+  const [savingDefaults, setSavingDefaults] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, u] = await Promise.all([
+      const [s, u, d] = await Promise.all([
         adminService.getStats(),
         adminService.listUsers({ status: statusFilter || undefined, search: search || undefined }),
+        adminService.getDefaults(),
       ]);
       setStats(s);
       setUsers(u);
+      setDefaults(d);
     } catch { toast('Failed to load users', 'error'); }
     finally { setLoading(false); }
   }, [statusFilter, search]);
@@ -140,6 +147,27 @@ export default function AdminDashboard() {
     finally { setUpdatingId(null); }
   };
 
+  const handleDefaultToggle = (feature: string, value: boolean) => {
+    if (!defaults) return;
+    setDefaults(prev => prev ? { ...prev, [feature]: value } : prev);
+  };
+
+  const handleSaveDefaults = async (applyToAll: boolean) => {
+    if (!defaults) return;
+    setSavingDefaults(true);
+    try {
+      const updated = await adminService.setDefaults(defaults, applyToAll);
+      setDefaults(updated);
+      if (applyToAll) {
+        // Refresh user list to reflect new features
+        const u = await adminService.listUsers({ status: statusFilter || undefined, search: search || undefined });
+        setUsers(u);
+      }
+      toast(applyToAll ? 'Defaults saved and applied to all users' : 'Defaults saved', 'success');
+    } catch { toast('Failed to save defaults', 'error'); }
+    finally { setSavingDefaults(false); }
+  };
+
   const statCards = stats ? [
     { label: 'Total',     value: stats.total,     color: 'text-primary' },
     { label: 'Active',    value: stats.active,    color: 'text-emerald-500' },
@@ -176,6 +204,63 @@ export default function AdminDashboard() {
               <p className={cn('text-3xl font-black', s.color)}>{s.value}</p>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Global Nav Defaults */}
+      {defaults && (
+        <div className="glass border border-white/10 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Globe size={18} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-sm font-black text-text">Global Dashboard Navigation</h2>
+                <p className="text-xs text-text-muted">Default nav items shown to all users. Save & Apply overrides every user.</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleSaveDefaults(false)} isLoading={savingDefaults}
+                className="rounded-xl h-9 px-4 text-xs font-bold bg-white/5 border-white/10">
+                Save Defaults
+              </Button>
+              <Button onClick={() => handleSaveDefaults(true)} isLoading={savingDefaults}
+                className="rounded-xl h-9 px-4 text-xs font-bold">
+                Save & Apply to All
+              </Button>
+            </div>
+          </div>
+
+          {/* Dashboard always on */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl border bg-primary/5 border-primary/20">
+            <div className="flex items-center gap-2">
+              <LayoutDashboard size={14} className="text-primary" />
+              <span className="text-xs font-bold text-primary">Dashboard</span>
+            </div>
+            <span className="text-[10px] text-primary font-black uppercase tracking-widest">Always On</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {NAV_FEATURES.map(({ key, label, icon: Icon }) => {
+              const enabled = defaults[key as keyof NavFeatures];
+              return (
+                <button key={key} onClick={() => handleDefaultToggle(key, !enabled)}
+                  className={cn(
+                    'flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all',
+                    enabled
+                      ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
+                      : 'bg-white/5 border-white/10 text-text-muted hover:border-white/20'
+                  )}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon size={13} className="shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </div>
+                  {enabled ? <ToggleRight size={16} className="shrink-0" /> : <ToggleLeft size={16} className="shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -54,3 +54,15 @@ export const updateUserFeatures = async (id: string, enabledFeatures: Partial<Ad
 export const deleteUser = async (id: string): Promise<void> => {
   await api.delete(`/admin/users/${id}`);
 };
+
+export type NavFeatures = AdminUser['enabledFeatures'];
+
+export const getDefaults = async (): Promise<NavFeatures> => {
+  const res = await api.get('/admin/defaults');
+  return res.data.defaults;
+};
+
+export const setDefaults = async (enabledFeatures: Partial<NavFeatures>, applyToAll: boolean): Promise<NavFeatures> => {
+  const res = await api.patch('/admin/defaults', { enabledFeatures, applyToAll });
+  return res.data.defaults;
+};

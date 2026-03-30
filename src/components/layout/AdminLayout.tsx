@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Shield, Users, LogOut, Sun, Moon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, LogOut, Sun, Moon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../lib/ThemeContext';
@@ -8,7 +8,6 @@ import { Logo } from '../ui/Logo';
 
 const adminNav = [
   { icon: Shield, label: 'Admin Dashboard', path: '/admin' },
-  { icon: Users, label: 'Users', path: '/admin/users' },
 ];
 
 export const AdminLayout = () => {
@@ -42,15 +41,16 @@ export const AdminLayout = () => {
           <div className="mx-3 mb-4 px-3 py-2 bg-primary/10 border border-primary/20 rounded-xl">
             <p className="text-[10px] font-black text-primary uppercase tracking-widest">Superadmin</p>
             <p className="text-xs font-semibold text-text truncate">{user?.name}</p>
+            <p className="text-[10px] text-text-muted truncate">{user?.email}</p>
           </div>
         )}
 
         <nav className="flex-1 px-3 space-y-1">
           {adminNav.map(item => (
-            <NavLink key={item.path} to={item.path} end={item.path === '/admin'}
+            <NavLink key={item.path} to={item.path}
               className={({ isActive }) => cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
-                isActive ? 'bg-primary text-white shadow-lg shadow-primary/40' : 'text-text-muted hover:text-text hover:bg-primary/5'
+                isActive ? 'bg-primary text-white shadow-lg shadow-primary/40 scale-[1.02]' : 'text-text-muted hover:text-text hover:bg-primary/5'
               )}>
               <item.icon size={20} className="shrink-0" />
               {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
