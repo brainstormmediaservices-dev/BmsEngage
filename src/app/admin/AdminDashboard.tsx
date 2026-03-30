@@ -11,7 +11,6 @@ import { useToast } from '../../components/ui/Toast';
 import { cn } from '../../lib/utils';
 import * as adminService from '../../services/adminService';
 import type { AdminUser, AdminStats, NavFeatures } from '../../services/adminService';
-
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   active:    { label: 'Active',    color: 'bg-emerald-500/10 text-emerald-500' },
@@ -46,15 +45,23 @@ const ROLE_LABELS: Record<string, string> = {
 // rejected → Approve  (reinstate)
 // suspended→ Approve  (reinstate)
 function ActionButtons({
-  user, isUpdating, onStatus,
+  user, isUpdating, onStatus, onVerify,
 }: {
   user: AdminUser;
   isUpdating: boolean;
   onStatus: (status: AdminUser['accountStatus']) => void;
+  onVerify: () => void;
 }) {
   const s = user.accountStatus;
   return (
     <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+      {/* Verify email — shown for unverified users */}
+      {!user.verified && (
+        <button onClick={onVerify} disabled={isUpdating}
+          className="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40">
+          Verify Email
+        </button>
+      )}
       {/* Approve — shown for pending, rejected, suspended */}
       {(s === 'pending' || s === 'rejected' || s === 'suspended') && (
         <button onClick={() => onStatus('active')} disabled={isUpdating}
@@ -144,6 +151,16 @@ export default function AdminDashboard() {
       toast('User deleted', 'success');
       adminService.getStats().then(setStats).catch(() => {});
     } catch { toast('Failed to delete user', 'error'); }
+    finally { setUpdatingId(null); }
+  };
+
+  const handleVerify = async (id: string) => {
+    setUpdatingId(id + 'verify');
+    try {
+      const updated = await adminService.verifyUser(id);
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, verified: updated.verified } : u));
+      toast('User email verified', 'success');
+    } catch { toast('Failed to verify user', 'error'); }
     finally { setUpdatingId(null); }
   };
 
@@ -339,7 +356,8 @@ export default function AdminDashboard() {
 
                     {/* Actions */}
                     <ActionButtons user={u} isUpdating={isUpdating}
-                      onStatus={(status) => handleStatus(u.id, status)} />
+                      onStatus={(status) => handleStatus(u.id, status)}
+                      onVerify={() => handleVerify(u.id)} />
 
                     {/* Delete + expand */}
                     <div className="flex items-center gap-1 shrink-0">

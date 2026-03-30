@@ -55,6 +55,11 @@ export const deleteUser = async (id: string): Promise<void> => {
   await api.delete(`/admin/users/${id}`);
 };
 
+export const verifyUser = async (id: string): Promise<AdminUser> => {
+  const res = await api.patch(`/admin/users/${id}/verify`);
+  return res.data.user;
+};
+
 export type NavFeatures = AdminUser['enabledFeatures'];
 
 export const getDefaults = async (): Promise<NavFeatures> => {
