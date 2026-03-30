@@ -1,16 +1,58 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Bell, User, Image as ImageIcon, Calendar, BarChart3, Link2, X, Sun, Moon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Search, Bell, User, Image as ImageIcon, Calendar, BarChart3, Link2, X, Sun, Moon, LogOut, Building2, ChevronDown, RefreshCw } from 'lucide-react';
 import { MOCK_MEDIA, MOCK_ACCOUNTS } from '../../lib/mock-data';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../lib/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/NotificationContext';
+import { NotificationPanel } from '../notifications/NotificationPanel';
+import { switchContext } from '../../services/settingsService';
 
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout, refreshUser } = useAuth();
+  const { unreadCount } = useNotifications();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [switchingContext, setSwitchingContext] = useState(false);
+  const [agencyName, setAgencyName] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const activeContext = user?.activeContext || 'personal';
+
+  // Resolve agency name — from own agency or from accepted invite
+  useEffect(() => {
+    if (!user) { setAgencyName(null); return; }
+    if (user.agency?.name) {
+      setAgencyName(user.agency.name);
+      return;
+    }
+    // Fetch from server in case they're a team member whose agency wasn't copied yet
+    import('../../services/settingsService').then(m => m.getMyAgency()).then(info => {
+      if (info.agency?.name) setAgencyName(info.agency.name);
+      else setAgencyName(null);
+    }).catch(() => setAgencyName(null));
+  }, [user?.id, user?.agency?.name]);
+
+  const hasAgency = !!agencyName;
+  const displayAgencyName = agencyName || user?.agency?.name || 'Agency';
+
+  const handleContextSwitch = async (ctx: 'personal' | 'agency') => {
+    if (ctx === activeContext || switchingContext) return;
+    setSwitchingContext(true);
+    try {
+      await switchContext(ctx);
+      // Full reload so all data (gallery, dashboard, etc.) re-fetches in the new context
+      window.location.reload();
+    } catch { setSwitchingContext(false); }
+  };
 
   const filteredMedia = MOCK_MEDIA.filter(item => 
     item.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -28,10 +70,22 @@ export const Header = () => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setIsSearchOpen(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <header className="h-16 border-b border-border bg-background/50 backdrop-blur-md sticky top-0 z-30 px-8 flex items-center justify-between">
@@ -141,28 +195,114 @@ export const Header = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        <button 
+        {/* Agency / Personal context switcher */}
+        {hasAgency && (
+          <div className="hidden md:flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1">
+            <button
+              onClick={() => handleContextSwitch('personal')}
+              disabled={switchingContext}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                activeContext === 'personal' ? 'bg-primary text-white shadow' : 'text-text-muted hover:text-text'
+              )}
+            >
+              <User size={13} /> Personal
+            </button>
+            <button
+              onClick={() => handleContextSwitch('agency')}
+              disabled={switchingContext}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                activeContext === 'agency' ? 'bg-primary text-white shadow' : 'text-text-muted hover:text-text'
+              )}
+            >
+              {switchingContext ? <RefreshCw size={13} className="animate-spin" /> : <Building2 size={13} />}
+              {displayAgencyName}
+            </button>
+          </div>
+        )}
+
+        <button
           onClick={toggleTheme}
           className="p-2 text-text-muted hover:text-text hover:bg-primary/5 rounded-xl transition-all"
         >
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <button className="p-2 text-text-muted hover:text-text hover:bg-primary/5 rounded-xl transition-all relative">
+        <button
+          onClick={() => setShowNotifications(true)}
+          className="p-2 text-text-muted hover:text-text hover:bg-primary/5 rounded-xl transition-all relative"
+        >
           <Bell size={20} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-background"></span>
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </button>
-        
-        <div className="flex items-center gap-3 pl-4 border-l border-border">
+
+        <div className="flex items-center gap-3 pl-4 border-l border-border relative" ref={userMenuRef}>
           <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium text-text">Alex Rivera</p>
-            <p className="text-xs text-text-muted uppercase tracking-tighter">Admin</p>
+            <p className="text-sm font-medium text-text">{user?.name || 'User'}</p>
+            <p className="text-xs text-text-muted uppercase tracking-tighter">
+              {activeContext === 'agency' && displayAgencyName
+                ? (user?.agencyRole ? user.agencyRole.replace(/_/g, ' ') : displayAgencyName)
+                : (user?.verified ? 'Verified' : 'Unverified')}
+            </p>
           </div>
-          <Link to="/settings" className="w-10 h-10 rounded-xl bg-white/5 border border-border flex items-center justify-center text-text-muted hover:text-text transition-all">
-            <User size={20} />
-          </Link>
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="w-10 h-10 rounded-xl bg-white/5 border border-border flex items-center justify-center overflow-hidden hover:border-primary/50 transition-all"
+          >
+            {user?.avatar ? (
+              <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-sm font-black text-text-muted">
+                {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || <User size={18} />}
+              </span>
+            )}
+          </button>
+
+          <AnimatePresence>
+            {showUserMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-full right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50"
+              >
+                <div className="p-4 border-b border-border">
+                  <p className="text-sm font-semibold text-text">{user?.name}</p>
+                  <p className="text-xs text-text-muted">{user?.email}</p>
+                </div>
+                <div className="p-2">
+                  <Link 
+                    to="/settings" 
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-primary/5 transition-colors text-text"
+                  >
+                    <User size={16} />
+                    <span className="text-sm">Settings</span>
+                  </Link>
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-red-500/10 transition-colors text-red-500"
+                  >
+                    <LogOut size={16} />
+                    <span className="text-sm">Logout</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
+
+      {/* Notification Panel — portaled to body to escape header stacking context */}
+      {createPortal(
+        <NotificationPanel isOpen={showNotifications} onClose={() => setShowNotifications(false)} />,
+        document.body
+      )}
     </header>
   );
 };

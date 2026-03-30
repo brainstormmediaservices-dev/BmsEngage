@@ -1,42 +1,37 @@
-import { MOCK_STATS, MOCK_MEDIA, MOCK_ACCOUNTS } from '../lib/mock-data';
-import { StatCard } from '../components/cards/StatCard';
+import { useState, useEffect } from 'react';
+import { MOCK_ACCOUNTS } from '../lib/mock-data';
 import { MediaCard } from '../components/cards/MediaCard';
 import { Button } from '../components/ui/Button';
-import { 
-  Plus, 
-  Calendar as CalendarIcon, 
-  ArrowRight, 
-  TrendingUp, 
-  Users, 
-  MessageSquare, 
-  Share2,
-  Zap,
-  Clock,
-  Layout,
-  ExternalLink,
-  Instagram,
-  Facebook,
-  Twitter,
-  Linkedin,
-  Youtube,
-  Music2 as TikTok
+import { mediaService } from '../services/mediaService';
+import { MediaAsset } from '../types/media';
+import { usePermissions } from '../hooks/usePermissions';
+import {
+  Plus, Calendar as CalendarIcon, ArrowRight, Zap, Clock, Layout,
+  ExternalLink, Instagram, Facebook, Twitter, Linkedin, Youtube,
+  Music2 as TikTok, Users, Image as ImageIcon, Loader2,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 
 const platformIcons: Record<string, any> = {
-  Instagram,
-  Facebook,
-  Twitter,
-  LinkedIn: Linkedin,
-  YouTube: Youtube,
-  TikTok,
+  Instagram, Facebook, Twitter, LinkedIn: Linkedin, YouTube: Youtube, TikTok,
 };
 
 export default function DashboardOverview() {
   const navigate = useNavigate();
+  const { canUploadAsset, canViewAsset } = usePermissions();
   const connectedPlatforms = MOCK_ACCOUNTS.filter(a => a.status === 'connected');
+
+  const [recentMedia, setRecentMedia] = useState<MediaAsset[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(true);
+
+  useEffect(() => {
+    if (!canViewAsset) { setMediaLoading(false); return; }
+    mediaService.getMedia().then(data => {
+      setRecentMedia(data.slice(0, 6));
+    }).catch(() => {}).finally(() => setMediaLoading(false));
+  }, [canViewAsset]);
 
   const handleNewCalendarEntry = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -49,7 +44,7 @@ export default function DashboardOverview() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-text mb-2">Dashboard</h1>
-          <p className="text-text-muted font-medium">Welcome back, Alex. Here's your agency's performance at a glance.</p>
+          <p className="text-text-muted font-medium">Here's your agency's performance at a glance.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={handleNewCalendarEntry} className="h-12 px-6 rounded-xl font-bold bg-white/5 border-white/10">
@@ -63,7 +58,7 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* Quick Stats Grid */}
+      {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
           { label: 'Total Posts', value: '1,284', change: '+12%', trend: 'up', icon: Layout },
@@ -71,22 +66,16 @@ export default function DashboardOverview() {
           { label: 'Connected Accounts', value: connectedPlatforms.length.toString(), change: '0', trend: 'neutral', icon: Users },
           { label: 'Avg. Engagement', value: '4.8%', change: '+0.4%', trend: 'up', icon: Zap },
         ].map((stat, i) => (
-          <motion.div
-            key={i}
-            whileHover={{ y: -5 }}
-            className="glass border border-white/10 p-6 rounded-[24px] space-y-4 cursor-pointer group hover:border-primary/30 transition-all"
-          >
+          <motion.div key={i} whileHover={{ y: -5 }}
+            className="glass border border-white/10 p-6 rounded-[24px] space-y-4 cursor-pointer group hover:border-primary/30 transition-all">
             <div className="flex items-center justify-between">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                 <stat.icon size={20} />
               </div>
-              <span className={cn(
-                "text-[10px] font-black px-2 py-0.5 rounded-full",
-                stat.trend === 'up' ? "bg-emerald-500/10 text-emerald-500" : 
+              <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-full",
+                stat.trend === 'up' ? "bg-emerald-500/10 text-emerald-500" :
                 stat.trend === 'down' ? "bg-red-500/10 text-red-500" : "bg-white/10 text-text-muted"
-              )}>
-                {stat.change}
-              </span>
+              )}>{stat.change}</span>
             </div>
             <div>
               <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{stat.label}</p>
@@ -97,7 +86,7 @@ export default function DashboardOverview() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Activity / Gallery Preview */}
+        {/* Recent Content */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black text-text">Recent Content</h2>
@@ -105,18 +94,40 @@ export default function DashboardOverview() {
               View Gallery <ArrowRight size={14} />
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {MOCK_MEDIA.slice(0, 6).map((media) => (
-              <MediaCard 
-                key={media.id} 
-                id={media.id} 
-                type={media.category} 
-                title={media.title} 
-                url={media.url} 
-                date={new Date(media.metadata.createdDate).toLocaleDateString()} 
-              />
-            ))}
-          </div>
+
+          {!canViewAsset ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center bg-card border border-border rounded-3xl">
+              <ImageIcon size={32} className="text-text-muted mb-3 opacity-40" />
+              <p className="text-sm text-text-muted">You don't have permission to view media assets.</p>
+            </div>
+          ) : mediaLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 size={24} className="animate-spin text-primary" />
+            </div>
+          ) : recentMedia.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center bg-card border border-border rounded-3xl gap-3">
+              <ImageIcon size={32} className="text-text-muted opacity-40" />
+              <p className="text-sm text-text-muted">No media yet.</p>
+              {canUploadAsset && (
+                <Link to="/gallery">
+                  <Button size="sm" variant="outline">Upload your first asset</Button>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {recentMedia.map(media => (
+                <MediaCard
+                  key={media.id}
+                  id={media.id}
+                  type={media.category}
+                  title={media.title}
+                  url={media.url}
+                  date={new Date(media.metadata.createdDate).toLocaleDateString()}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Upcoming Queue */}
@@ -127,7 +138,7 @@ export default function DashboardOverview() {
               Full Schedule <ArrowRight size={14} />
             </Link>
           </div>
-          
+
           <div className="glass border border-white/10 rounded-[32px] p-8 space-y-6">
             {[
               { time: '10:00 AM', platform: 'Instagram', title: 'Summer Campaign Launch', status: 'Ready' },
@@ -148,21 +159,15 @@ export default function DashboardOverview() {
                     </div>
                     <p className="text-sm font-bold truncate group-hover:text-primary transition-colors text-text">{post.title}</p>
                   </div>
-                  <span className={cn(
-                    "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0",
+                  <span className={cn("text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shrink-0",
                     post.status === 'Ready' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                  )}>
-                    {post.status}
-                  </span>
+                  )}>{post.status}</span>
                 </div>
               );
             })}
-            
             <div className="pt-4">
               <Link to="/scheduler">
-                <Button variant="outline" className="w-full h-12 rounded-xl font-bold bg-white/5 border-white/10">
-                  Open Scheduler
-                </Button>
+                <Button variant="outline" className="w-full h-12 rounded-xl font-bold bg-white/5 border-white/10">Open Scheduler</Button>
               </Link>
             </div>
           </div>

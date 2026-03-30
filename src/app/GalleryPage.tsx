@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
-import { MOCK_MEDIA } from '../lib/mock-data';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { MediaAsset, MediaCategory } from '../types/media';
+import { mediaService, requestDeleteMedia, acceptDeleteRequest } from '../services/mediaService';
 import { MediaGalleryTopBar } from '../components/gallery/MediaGalleryTopBar';
 import { MediaAssetCard } from '../components/gallery/MediaAssetCard';
 import { UploadMediaModal } from '../components/gallery/UploadMediaModal';
@@ -13,14 +14,49 @@ import { useToast } from '../components/ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { usePermissions } from '../hooks/usePermissions';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function GalleryPage() {
-  const [media, setMedia] = useState<MediaAsset[]>(MOCK_MEDIA);
+  const [media, setMedia] = useState<MediaAsset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [activeFileType, setActiveFileType] = useState('All');
   const [activeSort, setActiveSort] = useState('Newest');
   const { toast } = useToast();
+  const { canUploadAsset, canDeleteAsset } = usePermissions();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  // Load media from API
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const data = await mediaService.getMedia();
+        setMedia(data);
+      } catch {
+        toast('Failed to load media', 'error');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  // Handle ?editAsset=:id from edit share link — open variant upload for that asset
+  useEffect(() => {
+    const editAssetId = searchParams.get('editAsset');
+    if (!editAssetId || isLoading) return;
+    const target = media.find(m => m.id === editAssetId);
+    if (target) {
+      setParentForVariant(target);
+      setIsUploadOpen(true);
+      // Log edit link access on the backend
+      mediaService.getMediaById?.(editAssetId, 'editlink').catch(() => {});
+    }
+  }, [searchParams, media, isLoading]);
 
   // Modal States
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -31,6 +67,7 @@ export default function GalleryPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [parentForVariant, setParentForVariant] = useState<MediaAsset | undefined>(undefined);
+  const [correctionReplyTo, setCorrectionReplyTo] = useState<string | undefined>(undefined);
 
   // Filtering Logic
   const filteredMedia = useMemo(() => {
@@ -49,52 +86,53 @@ export default function GalleryPage() {
     });
   }, [media, searchQuery, activeCategory, activeFileType, activeSort]);
 
-  const handleUpload = (newAssetData: Partial<MediaAsset>) => {
-    if (parentForVariant) {
-      // Add variant to existing asset
-      const updatedMedia = media.map(asset => {
-        if (asset.id === parentForVariant.id) {
-          const newVariant = {
-            id: `v${Date.now()}`,
-            parentAssetId: asset.id,
-            version: asset.variants.length + 2,
-            title: newAssetData.title || 'New Variant',
-            url: newAssetData.url!,
-            metadata: newAssetData.metadata!
-          };
-          return {
-            ...asset,
-            variants: [...asset.variants, newVariant]
-          };
-        }
-        return asset;
-      });
-      setMedia(updatedMedia);
-      setParentForVariant(undefined);
-    } else {
-      // Add new asset
-      const newAsset: MediaAsset = {
-        id: Date.now().toString(),
-        uploadedBy: 'Alex Rivera',
-        variants: [],
-        ...newAssetData
-      } as MediaAsset;
-      setMedia([newAsset, ...media]);
-    }
+  const handleUpload = (newAsset: MediaAsset) => {
+    // If it's an updated asset (variant added), replace it; otherwise prepend
+    setMedia((prev) => {
+      const exists = prev.find((m) => m.id === newAsset.id);
+      if (exists) return prev.map((m) => m.id === newAsset.id ? newAsset : m);
+      return [newAsset, ...prev];
+    });
+    setParentForVariant(undefined);
   };
 
   const handleDelete = async () => {
     if (!selectedAsset) return;
-    
     setIsDeleting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setMedia(media.filter(m => m.id !== selectedAsset.id));
-    setIsDeleting(false);
-    setIsDeleteOpen(false);
-    setSelectedAsset(null);
-    toast('Asset deleted successfully', 'success');
+    try {
+      await mediaService.deleteMedia(selectedAsset.id);
+      setMedia(prev => prev.filter(m => m.id !== selectedAsset.id));
+      toast('Asset deleted successfully', 'success');
+      setIsDeleteOpen(false);
+      setSelectedAsset(null);
+    } catch (err: any) {
+      const data = err?.response?.data;
+      if (data?.requiresRequest) {
+        // Need to send delete request first
+        toast('Asset is shared — sending delete request to shared users...', 'info');
+        try {
+          const updated = await requestDeleteMedia(selectedAsset.id);
+          setMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          setSelectedAsset(updated);
+          toast('Delete request sent to all shared users', 'success');
+        } catch { toast('Failed to send delete request', 'error'); }
+      } else if (data?.pendingCount) {
+        toast(`Waiting for ${data.pendingCount} user(s) to accept the delete request`, 'info');
+      } else {
+        toast('Failed to delete asset', 'error');
+      }
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
+    }
+  };
+
+  const handleAcceptDelete = async (asset: MediaAsset) => {
+    try {
+      const updated = await acceptDeleteRequest(asset.id);
+      setMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+      toast('Delete request accepted', 'success');
+    } catch { toast('Failed to accept delete request', 'error'); }
   };
 
   const handleDownload = (asset: any) => {
@@ -119,24 +157,32 @@ export default function GalleryPage() {
         onSortChange={setActiveSort}
         onClearFilters={handleClearFilters}
         onUploadClick={() => { setParentForVariant(undefined); setIsUploadOpen(true); }}
+        canUpload={canUploadAsset}
         activeCategory={activeCategory}
         activeFileType={activeFileType}
         activeSort={activeSort}
         searchQuery={searchQuery}
       />
 
-      {filteredMedia.length > 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center py-32">
+          <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      ) : filteredMedia.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           <AnimatePresence mode="popLayout">
             {filteredMedia.map((asset) => (
               <MediaAssetCard 
                 key={asset.id}
                 asset={asset}
+                currentUserId={user?.id}
                 onView={(a) => { setSelectedAsset(a); setIsDetailOpen(true); }}
                 onEdit={(a) => { setSelectedAsset(a); setIsEditOpen(true); }}
-                onAddVariant={(a) => { setParentForVariant(a); setIsUploadOpen(true); }}
+                onAddVariant={(a) => { setCorrectionReplyTo(undefined); setParentForVariant(a); setIsUploadOpen(true); }}
+                onAddVariantForCorrection={(a, corrId) => { setCorrectionReplyTo(corrId); setParentForVariant(a); setIsUploadOpen(true); }}
                 onDelete={(a) => { setSelectedAsset(a); setIsDeleteOpen(true); }}
                 onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
+                onAcceptDelete={handleAcceptDelete}
               />
             ))}
           </AnimatePresence>
@@ -165,9 +211,10 @@ export default function GalleryPage() {
       {/* Modals */}
       <UploadMediaModal 
         isOpen={isUploadOpen}
-        onClose={() => { setIsUploadOpen(false); setParentForVariant(undefined); }}
+        onClose={() => { setIsUploadOpen(false); setParentForVariant(undefined); setCorrectionReplyTo(undefined); }}
         onUpload={handleUpload}
         parentAsset={parentForVariant}
+        correctionReplyTo={correctionReplyTo}
       />
 
       <AssetDetailModal 
@@ -177,6 +224,16 @@ export default function GalleryPage() {
         onEdit={(a) => { setIsDetailOpen(false); setSelectedAsset(a); setIsEditOpen(true); }}
         onDownload={handleDownload}
         onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
+        onAssetUpdate={(updated) => {
+          setMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          setSelectedAsset(updated);
+        }}
+        onAddVariantForCorrection={(a, corrId) => {
+          setIsDetailOpen(false);
+          setCorrectionReplyTo(corrId);
+          setParentForVariant(a);
+          setIsUploadOpen(true);
+        }}
       />
 
       <EditAssetModal 
@@ -184,7 +241,7 @@ export default function GalleryPage() {
         onClose={() => setIsEditOpen(false)}
         asset={selectedAsset}
         onSave={(updated) => {
-          setMedia(media.map(m => m.id === updated.id ? updated : m));
+          setMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
           setSelectedAsset(updated);
         }}
       />
@@ -201,6 +258,10 @@ export default function GalleryPage() {
         isOpen={isShareOpen}
         onClose={() => { setIsShareOpen(false); setSelectedAsset(null); }}
         asset={selectedAsset}
+        onAssetUpdate={(updated) => {
+          setMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          setSelectedAsset(updated);
+        }}
       />
     </div>
   );

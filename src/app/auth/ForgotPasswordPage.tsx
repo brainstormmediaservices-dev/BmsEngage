@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, ArrowLeft, Send, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { Mail, ArrowLeft, Send, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Logo } from '../../components/ui/Logo';
+import authService from '../../services/authService';
 
 export default function ForgotPasswordPage() {
-  const [step, setStep] = useState<'email' | 'success' | 'reset'>('email');
+  const [searchParams] = useSearchParams();
+  const resetToken = searchParams.get('token');
+  
+  const [step, setStep] = useState<'email' | 'success' | 'reset'>(resetToken ? 'reset' : 'email');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [email, setEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwords, setPasswords] = useState({ new: '', confirm: '' });
@@ -15,20 +20,44 @@ export default function ForgotPasswordPage() {
   const handleSendReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    setErrorMessage('');
+    
+    try {
+      await authService.forgotPassword(email);
       setStep('success');
-    }, 1500);
+    } catch (error: any) {
+      setErrorMessage(error.response?.data?.error || 'Failed to send reset email');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (passwords.new !== passwords.confirm) {
+      setErrorMessage('Passwords do not match');
+      return;
+    }
+    
+    if (passwords.new.length < 8) {
+      setErrorMessage('Password must be at least 8 characters');
+      return;
+    }
+    
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      // In a real app, we'd redirect to login
+    setErrorMessage('');
+    
+    try {
+      await authService.resetPassword({ 
+        token: resetToken || '', 
+        password: passwords.new 
+      });
       window.location.href = '/login';
-    }, 1500);
+    } catch (error: any) {
+      setErrorMessage(error.response?.data?.error || 'Failed to reset password');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -110,6 +139,17 @@ export default function ForgotPasswordPage() {
               <Button type="submit" className="w-full py-4" isLoading={isLoading}>
                 <Send className="w-4 h-4 mr-2" /> Send Reset Link
               </Button>
+
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-500 flex items-center gap-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  {errorMessage}
+                </motion.div>
+              )}
 
               <Link to="/login" className="flex items-center justify-center gap-2 text-sm text-text-muted hover:text-text transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Back to Sign In
@@ -196,6 +236,17 @@ export default function ForgotPasswordPage() {
               <Button type="submit" className="w-full py-4" isLoading={isLoading}>
                 <ShieldCheck className="w-4 h-4 mr-2" /> Reset Password
               </Button>
+
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-500 flex items-center gap-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  {errorMessage}
+                </motion.div>
+              )}
             </motion.form>
           )}
         </AnimatePresence>

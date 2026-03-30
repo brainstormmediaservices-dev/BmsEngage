@@ -16,19 +16,13 @@ interface MediaGalleryTopBarProps {
   activeFileType: string;
   activeSort: string;
   searchQuery: string;
+  canUpload?: boolean;
 }
 
 export const MediaGalleryTopBar = ({
-  onSearch,
-  onCategoryChange,
-  onFileTypeChange,
-  onSortChange,
-  onClearFilters,
-  onUploadClick,
-  activeCategory,
-  activeFileType,
-  activeSort,
-  searchQuery
+  onSearch, onCategoryChange, onFileTypeChange, onSortChange,
+  onClearFilters, onUploadClick, activeCategory, activeFileType,
+  activeSort, searchQuery, canUpload = true,
 }: MediaGalleryTopBarProps) => {
   const categories: (MediaCategory | 'All')[] = ['All', 'Flyer', 'Image', 'Video', 'Graphics'];
   const fileTypes = ['All', 'JPG', 'PNG', 'SVG', 'MP4', 'MOV', 'PDF', 'WEBP'];
@@ -62,12 +56,11 @@ export const MediaGalleryTopBar = ({
               </motion.div>
             )}
           </AnimatePresence>
-          <Button 
-            onClick={onUploadClick}
-            className="h-12 px-6 rounded-xl font-bold shadow-xl shadow-primary/30"
-          >
-            <Plus size={20} className="mr-2" /> Upload Media
-          </Button>
+          {canUpload && (
+            <Button onClick={onUploadClick} className="h-12 px-6 rounded-xl font-bold shadow-xl shadow-primary/30">
+              <Plus size={20} className="mr-2" /> Upload Media
+            </Button>
+          )}
         </div>
       </div>
 

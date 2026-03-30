@@ -1,23 +1,67 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, CheckCircle2, RefreshCw, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, CheckCircle2, RefreshCw, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Logo } from '../../components/ui/Logo';
+import authService from '../../services/authService';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user, refreshUser } = useAuth();
+  const verificationToken = searchParams.get('token');
+  
   const [isResending, setIsResending] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleResend = async () => {
-    setIsResending(true);
-    setTimeout(() => setIsResending(false), 2000);
+  useEffect(() => {
+    // Auto-verify if token is in URL
+    if (verificationToken) {
+      handleVerify(verificationToken);
+    }
+  }, [verificationToken]);
+
+  const handleVerify = async (token: string) => {
+    setIsVerifying(true);
+    setErrorMessage('');
+    
+    try {
+      const response = await authService.verifyEmail(token);
+      setIsVerified(true);
+      await refreshUser();
+      setTimeout(() => navigate('/dashboard'), 2000);
+    } catch (error: any) {
+      const errorData = error.response?.data;
+      if (errorData?.expired) {
+        setErrorMessage('This verification link has expired. Please request a new one.');
+      } else {
+        setErrorMessage(errorData?.error || 'Verification failed. Please try again.');
+      }
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
-  const handleVerifyDemo = () => {
-    setIsVerified(true);
-    setTimeout(() => navigate('/dashboard'), 2000);
+  const handleResend = async () => {
+    if (!user?.email) {
+      setErrorMessage('No email found. Please sign up again.');
+      return;
+    }
+    
+    setIsResending(true);
+    setErrorMessage('');
+    
+    try {
+      await authService.resendVerification(user.email);
+    } catch (error: any) {
+      setErrorMessage(error.response?.data?.error || 'Failed to resend verification');
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -32,7 +76,17 @@ export default function VerifyEmailPage() {
         <Logo className="justify-center mb-10" size="sm" />
         
         <AnimatePresence mode="wait">
-          {!isVerified ? (
+          {isVerifying ? (
+            <motion.div
+              key="verifying"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
+              <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto"></div>
+              <p className="text-text-muted">Verifying your email...</p>
+            </motion.div>
+          ) : !isVerified ? (
             <motion.div
               key="verify-content"
               initial={{ opacity: 0, y: 10 }}
@@ -52,7 +106,10 @@ export default function VerifyEmailPage() {
               <div>
                 <h1 className="text-2xl font-bold mb-3 text-text">Verify your email</h1>
                 <p className="text-text-muted text-sm leading-relaxed">
-                  We've sent a verification link to your email address. Please click the link to activate your account.
+                  We've sent a verification link to {user?.email || 'your email address'}. Please click the link to activate your account.
+                </p>
+                <p className="text-text-muted text-xs mt-2 italic">
+                  ⏰ The verification link expires in 3 minutes for security.
                 </p>
               </div>
 
@@ -66,14 +123,18 @@ export default function VerifyEmailPage() {
                   <RefreshCw className={`w-4 h-4 mr-2 ${isResending ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                   Resend Verification Link
                 </Button>
-                
-                <button 
-                  onClick={handleVerifyDemo}
-                  className="w-full py-2 text-xs text-text-muted/50 hover:text-text-muted transition-colors"
-                >
-                  (Demo: Simulate Verification)
-                </button>
               </div>
+
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-500 flex items-center gap-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  {errorMessage}
+                </motion.div>
+              )}
 
               <Link to="/login" className="block text-sm text-text-muted hover:text-text transition-colors">
                 Back to Sign In

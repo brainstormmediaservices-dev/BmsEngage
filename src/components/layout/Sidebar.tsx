@@ -7,6 +7,7 @@ import {
   Calendar, 
   BarChart3, 
   Settings,
+  Bell,
   ChevronLeft,
   ChevronRight,
   Sun,
@@ -16,6 +17,7 @@ import { Logo } from '../ui/Logo';
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../lib/ThemeContext';
+import { useNotifications } from '../../contexts/NotificationContext';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
@@ -24,12 +26,14 @@ const navItems = [
   { icon: PenTool, label: 'Posts', path: '/posts' },
   { icon: Calendar, label: 'Scheduler', path: '/scheduler' },
   { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+  { icon: Bell, label: 'Notifications', path: '/notifications', badge: true },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
 export const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { unreadCount } = useNotifications();
 
   return (
     <aside 
@@ -63,13 +67,20 @@ export const Sidebar = () => {
               key={item.path}
               to={item.path}
               className={({ isActive }) => cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group relative",
                 isActive 
                   ? "bg-primary text-white shadow-lg shadow-primary/40 scale-[1.02]" 
                   : "text-text-muted hover:text-text hover:bg-primary/5"
               )}
             >
-              <item.icon size={20} className={cn("shrink-0", isCollapsed && "mx-auto")} />
+              <div className="relative shrink-0">
+                <item.icon size={20} className={cn(isCollapsed && "mx-auto")} />
+                {item.badge && unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
               {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
             </NavLink>
           ))}

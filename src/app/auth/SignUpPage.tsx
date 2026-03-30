@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Mail, Lock, Eye, EyeOff, Chrome, Apple, Check, X, ShieldCheck } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, Chrome, Apple, Check, X, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Logo } from '../../components/ui/Logo';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function SignUpPage() {
   const navigate = useNavigate();
+  const { signup } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -37,11 +40,15 @@ export default function SignUpPage() {
     if (strengthScore < 5 || !passwordsMatch) return;
     
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    setErrorMessage('');
+    
+    try {
+      await signup(formData.fullName, formData.email, formData.password);
       navigate('/verify-email');
-    }, 2000);
+    } catch (error: any) {
+      setErrorMessage(error.response?.data?.error || 'Registration failed. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -210,6 +217,17 @@ export default function SignUpPage() {
           >
             <ShieldCheck className="w-5 h-5 mr-2" /> Create Account
           </Button>
+
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-500 flex items-center gap-2"
+            >
+              <AlertCircle className="w-4 h-4" />
+              {errorMessage}
+            </motion.div>
+          )}
         </form>
 
         <div className="mt-8 relative">
