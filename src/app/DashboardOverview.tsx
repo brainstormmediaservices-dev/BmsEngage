@@ -4,15 +4,23 @@ import { MediaCard } from '../components/cards/MediaCard';
 import { Button } from '../components/ui/Button';
 import { mediaService } from '../services/mediaService';
 import { MediaAsset } from '../types/media';
+import { AssetDetailModal } from '../components/gallery/AssetDetailModal';
+import { EditAssetModal } from '../components/gallery/EditAssetModal';
+import { DeleteAssetModal } from '../components/gallery/DeleteAssetModal';
+import { ShareAssetModal } from '../components/gallery/ShareAssetModal';
+import { UploadMediaModal } from '../components/gallery/UploadMediaModal';
 import { usePermissions } from '../hooks/usePermissions';
+import { useToast } from '../components/ui/Toast';
 import {
-  Plus, Calendar as CalendarIcon, ArrowRight, Zap, Clock, Layout,
+  ArrowRight, Clock, Layout,
   ExternalLink, Instagram, Facebook, Twitter, Linkedin, Youtube,
-  Music2 as TikTok, Users, Image as ImageIcon, Loader2,
+  Music2 as TikTok, Users, Image as ImageIcon, Loader2, Zap,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
+import { requestDeleteMedia, acceptDeleteRequest } from '../services/mediaService';
 
 const platformIcons: Record<string, any> = {
   Instagram, Facebook, Twitter, LinkedIn: Linkedin, YouTube: Youtube, TikTok,
@@ -21,21 +29,57 @@ const platformIcons: Record<string, any> = {
 export default function DashboardOverview() {
   const navigate = useNavigate();
   const { canUploadAsset, canViewAsset } = usePermissions();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const connectedPlatforms = MOCK_ACCOUNTS.filter(a => a.status === 'connected');
 
-  const [recentMedia, setRecentMedia] = useState<MediaAsset[]>([]);
+  const [allMedia, setAllMedia] = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(true);
+
+  // Modal state — mirrors GalleryPage
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
+  const [parentForVariant, setParentForVariant] = useState<MediaAsset | undefined>(undefined);
 
   useEffect(() => {
     if (!canViewAsset) { setMediaLoading(false); return; }
     mediaService.getMedia().then(data => {
-      setRecentMedia(data.slice(0, 6));
+      setAllMedia(data);
     }).catch(() => {}).finally(() => setMediaLoading(false));
   }, [canViewAsset]);
 
-  const handleNewCalendarEntry = () => {
-    const today = new Date().toISOString().split('T')[0];
-    navigate('/composer', { state: { date: today } });
+  const recentMedia = allMedia.slice(0, 6);
+  const totalAssets = allMedia.length;
+
+  const handleDelete = async () => {
+    if (!selectedAsset) return;
+    setIsDeleting(true);
+    try {
+      await mediaService.deleteMedia(selectedAsset.id);
+      setAllMedia(prev => prev.filter(m => m.id !== selectedAsset.id));
+      toast('Asset deleted', 'success');
+      setIsDeleteOpen(false);
+      setSelectedAsset(null);
+    } catch (err: any) {
+      const data = err?.response?.data;
+      if (data?.requiresRequest) {
+        try {
+          const updated = await requestDeleteMedia(selectedAsset.id);
+          setAllMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          toast('Delete request sent', 'success');
+        } catch { toast('Failed to send delete request', 'error'); }
+      } else {
+        toast('Failed to delete asset', 'error');
+      }
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
+    }
   };
 
   return (
@@ -46,8 +90,8 @@ export default function DashboardOverview() {
           <h1 className="text-4xl font-black tracking-tight text-text mb-2">Dashboard</h1>
           <p className="text-text-muted font-medium">Here's your agency's performance at a glance.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleNewCalendarEntry} className="h-12 px-6 rounded-xl font-bold bg-white/5 border-white/10">
+        {/* <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => navigate('/composer', { state: { date: new Date().toISOString().split('T')[0] } })} className="h-12 px-6 rounded-xl font-bold bg-white/5 border-white/10">
             <CalendarIcon size={18} className="mr-2" /> New Calendar Entry
           </Button>
           <Link to="/composer">
@@ -55,13 +99,19 @@ export default function DashboardOverview() {
               <Plus size={18} className="mr-2" /> New Post
             </Button>
           </Link>
-        </div>
+        </div> */}
       </div>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Total Posts', value: '1,284', change: '+12%', trend: 'up', icon: Layout },
+          {
+            label: 'Total Assets',
+            value: mediaLoading ? '—' : totalAssets.toString(),
+            change: mediaLoading ? '' : `${totalAssets} uploaded`,
+            trend: 'up',
+            icon: ImageIcon,
+          },
           { label: 'Scheduled', value: '42', change: '+5', trend: 'up', icon: Clock },
           { label: 'Connected Accounts', value: connectedPlatforms.length.toString(), change: '0', trend: 'neutral', icon: Users },
           { label: 'Avg. Engagement', value: '4.8%', change: '+0.4%', trend: 'up', icon: Zap },
@@ -72,10 +122,12 @@ export default function DashboardOverview() {
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                 <stat.icon size={20} />
               </div>
-              <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-full",
-                stat.trend === 'up' ? "bg-emerald-500/10 text-emerald-500" :
-                stat.trend === 'down' ? "bg-red-500/10 text-red-500" : "bg-white/10 text-text-muted"
-              )}>{stat.change}</span>
+              {stat.change && (
+                <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-full",
+                  stat.trend === 'up' ? "bg-emerald-500/10 text-emerald-500" :
+                  stat.trend === 'down' ? "bg-red-500/10 text-red-500" : "bg-white/10 text-text-muted"
+                )}>{stat.change}</span>
+              )}
             </div>
             <div>
               <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{stat.label}</p>
@@ -116,14 +168,16 @@ export default function DashboardOverview() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {recentMedia.map(media => (
+              {recentMedia.map(asset => (
                 <MediaCard
-                  key={media.id}
-                  id={media.id}
-                  type={media.category}
-                  title={media.title}
-                  url={media.url}
-                  date={new Date(media.metadata.createdDate).toLocaleDateString()}
+                  key={asset.id}
+                  asset={asset}
+                  onView={(a) => { setSelectedAsset(a); setIsDetailOpen(true); }}
+                  onEdit={(a) => { setSelectedAsset(a); setIsEditOpen(true); }}
+                  onDelete={(a) => { setSelectedAsset(a); setIsDeleteOpen(true); }}
+                  onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
+                  onAddVariant={(a) => { setParentForVariant(a); setIsUploadOpen(true); }}
+                  onSchedule={(a) => navigate('/composer', { state: { asset: a } })}
                 />
               ))}
             </div>
@@ -172,7 +226,7 @@ export default function DashboardOverview() {
             </div>
           </div>
 
-          {/* Upgrade Card */}
+          {/* Upgrade Card — commented out
           <div className="bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 rounded-[32px] p-8 relative overflow-hidden group">
             <div className="relative z-10 space-y-4">
               <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white">
@@ -186,8 +240,66 @@ export default function DashboardOverview() {
             </div>
             <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-primary/20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
           </div>
+          */}
         </div>
       </div>
+
+      {/* Modals */}
+      <AssetDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        asset={selectedAsset}
+        onEdit={(a) => { setIsDetailOpen(false); setSelectedAsset(a); setIsEditOpen(true); }}
+        onDownload={(a) => toast(`Downloading ${a.title}...`, 'success')}
+        onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
+        onAssetUpdate={(updated) => {
+          setAllMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          setSelectedAsset(updated);
+        }}
+        onAddVariantForCorrection={(a, corrId) => {
+          setIsDetailOpen(false);
+          setParentForVariant(a);
+          setIsUploadOpen(true);
+        }}
+      />
+      <EditAssetModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        asset={selectedAsset}
+        onSave={(updated) => {
+          setAllMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          setSelectedAsset(updated);
+        }}
+      />
+      <DeleteAssetModal
+        isOpen={isDeleteOpen}
+        onClose={() => { setIsDeleteOpen(false); setSelectedAsset(null); }}
+        onConfirm={handleDelete}
+        asset={selectedAsset}
+        isLoading={isDeleting}
+      />
+      <ShareAssetModal
+        isOpen={isShareOpen}
+        onClose={() => { setIsShareOpen(false); setSelectedAsset(null); }}
+        asset={selectedAsset}
+        onAssetUpdate={(updated) => {
+          setAllMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
+          setSelectedAsset(updated);
+        }}
+      />
+      <UploadMediaModal
+        isOpen={isUploadOpen}
+        onClose={() => { setIsUploadOpen(false); setParentForVariant(undefined); }}
+        onUpload={(newAsset) => {
+          setAllMedia(prev => {
+            const exists = prev.find(m => m.id === newAsset.id);
+            if (exists) return prev.map(m => m.id === newAsset.id ? newAsset : m);
+            return [newAsset, ...prev];
+          });
+          setParentForVariant(undefined);
+        }}
+        parentAsset={parentForVariant}
+      />
     </div>
   );
 }
