@@ -4,6 +4,9 @@ export interface Startup {
   id: string;
   name: string;
   description: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
   logo: string | null;
   createdAt: string;
 }
@@ -13,12 +16,12 @@ export const startupService = {
     const res = await api.get('/startups');
     return res.data.startups;
   },
-  create: async (name: string, description: string): Promise<Startup> => {
-    const res = await api.post('/startups', { name, description });
+  create: async (data: { name: string; description: string; phone: string; whatsapp: string; email: string }): Promise<Startup> => {
+    const res = await api.post('/startups', data);
     return res.data.startup;
   },
-  update: async (id: string, name: string, description: string): Promise<Startup> => {
-    const res = await api.patch(`/startups/${id}`, { name, description });
+  update: async (id: string, data: { name: string; description: string; phone: string; whatsapp: string; email: string }): Promise<Startup> => {
+    const res = await api.patch(`/startups/${id}`, data);
     return res.data.startup;
   },
   remove: async (id: string): Promise<void> => {

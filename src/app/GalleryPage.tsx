@@ -20,6 +20,8 @@ import { usePermissions } from '../hooks/usePermissions';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLE_GROUPS } from '../services/authService';
 
+import { startOfWeek, endOfWeek, addWeeks } from 'date-fns';
+
 const PAGE_SIZE = 12;
 const DAY_INDEX: Record<string, number> = {
   Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5,
@@ -32,7 +34,9 @@ export default function GalleryPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [activeFileType, setActiveFileType] = useState('All');
   const [activeSort, setActiveSort] = useState('Newest');
-  const [activeWeekDay, setActiveWeekDay] = useState('All');
+  const [activeWeekRange, setActiveWeekRange] = useState('all');
+  const [activeDateFrom, setActiveDateFrom] = useState('');
+  const [activeDateTo, setActiveDateTo] = useState('');
   const [activeStartup, setActiveStartup] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [startups, setStartups] = useState<Startup[]>([]);
@@ -104,32 +108,52 @@ export default function GalleryPage() {
     return media.filter(a => new Date(a.metadata.createdDate) >= monday);
   }, [media]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, activeCategory, activeFileType, activeSort, activeWeekDay, activeStartup]);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, activeCategory, activeFileType, activeSort, activeWeekRange, activeDateFrom, activeDateTo, activeStartup]);
 
   const filteredMedia = useMemo(() => {
+    const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const thisWeekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
+    const nextWeekStart = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
+    const nextWeekEnd = endOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
+
     return media.filter(asset => {
       const matchesSearch =
         asset.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         asset.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory = activeCategory === 'All' || asset.category === activeCategory;
       const matchesFileType = activeFileType === 'All' || asset.metadata.fileType === activeFileType;
-      let matchesDay = true;
-      if (activeWeekDay !== 'All') {
-        const dayIdx = DAY_INDEX[activeWeekDay];
-        matchesDay = new Date(asset.metadata.createdDate).getDay() === dayIdx;
+
+      // Week range filter — based on asset's targetDate
+      let matchesWeek = true;
+      const td = asset.targetDate ? new Date(asset.targetDate) : null;
+      if (activeWeekRange === 'this_week') {
+        matchesWeek = !!td && td >= thisWeekStart && td <= thisWeekEnd;
+      } else if (activeWeekRange === 'next_week') {
+        matchesWeek = !!td && td >= nextWeekStart && td <= nextWeekEnd;
       }
+
+      // Date range filter
+      let matchesDateRange = true;
+      if (activeDateFrom || activeDateTo) {
+        const assetDate = td || new Date(asset.metadata.createdDate);
+        if (activeDateFrom) matchesDateRange = matchesDateRange && assetDate >= new Date(activeDateFrom);
+        if (activeDateTo) matchesDateRange = matchesDateRange && assetDate <= new Date(activeDateTo + 'T23:59:59');
+      }
+
+      // Startup filter
       let matchesStartup = true;
       if (activeStartup !== 'All') {
         matchesStartup = activeStartup === 'none' ? !asset.startupId : asset.startupId === activeStartup;
       }
-      return matchesSearch && matchesCategory && matchesFileType && matchesDay && matchesStartup;
+
+      return matchesSearch && matchesCategory && matchesFileType && matchesWeek && matchesDateRange && matchesStartup;
     }).sort((a, b) => {
       if (activeSort === 'Newest') return new Date(b.metadata.createdDate).getTime() - new Date(a.metadata.createdDate).getTime();
       if (activeSort === 'Oldest') return new Date(a.metadata.createdDate).getTime() - new Date(b.metadata.createdDate).getTime();
       if (activeSort === 'A–Z') return a.title.localeCompare(b.title);
       return 0;
     });
-  }, [media, searchQuery, activeCategory, activeFileType, activeSort, activeWeekDay, activeStartup]);
+  }, [media, searchQuery, activeCategory, activeFileType, activeSort, activeWeekRange, activeDateFrom, activeDateTo, activeStartup]);
 
   const totalPages = Math.max(1, Math.ceil(filteredMedia.length / PAGE_SIZE));
   const pagedMedia = filteredMedia.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -183,7 +207,7 @@ export default function GalleryPage() {
 
   const handleClearFilters = () => {
     setSearchQuery(''); setActiveCategory('All'); setActiveFileType('All');
-    setActiveSort('Newest'); setActiveWeekDay('All'); setActiveStartup('All');
+    setActiveSort('Newest'); setActiveWeekRange('all'); setActiveDateFrom(''); setActiveDateTo(''); setActiveStartup('All');
     toast('All filters cleared', 'info');
   };
 
@@ -212,7 +236,8 @@ export default function GalleryPage() {
         onCategoryChange={setActiveCategory}
         onFileTypeChange={setActiveFileType}
         onSortChange={setActiveSort}
-        onWeekDayChange={setActiveWeekDay}
+        onWeekRangeChange={setActiveWeekRange}
+        onDateRangeChange={(from, to) => { setActiveDateFrom(from); setActiveDateTo(to); setActiveWeekRange('all'); }}
         onStartupChange={setActiveStartup}
         onClearFilters={handleClearFilters}
         onUploadClick={() => { setParentForVariant(undefined); setIsUploadOpen(true); }}
@@ -220,7 +245,9 @@ export default function GalleryPage() {
         activeCategory={activeCategory}
         activeFileType={activeFileType}
         activeSort={activeSort}
-        activeWeekDay={activeWeekDay}
+        activeWeekRange={activeWeekRange}
+        activeDateFrom={activeDateFrom}
+        activeDateTo={activeDateTo}
         activeStartup={activeStartup}
         searchQuery={searchQuery}
         startups={startups}

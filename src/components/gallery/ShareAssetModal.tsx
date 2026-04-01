@@ -4,13 +4,14 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import {
   Mail, Link as LinkIcon, Send, Copy, Check, Shield, Globe,
-  MessageCircle, Loader2, Users, UserCheck, Eye, Edit2, Clock, X,
+  MessageCircle, Loader2, Users, UserCheck, Eye, Edit2, Clock, X, ExternalLink,
 } from 'lucide-react';
 import { MediaAsset } from '../../types/media';
 import { useToast } from '../ui/Toast';
 import {
   shareMedia, shareWithUsers, revokeShare, getAgencyTeamMembers, TeamUser, clearViewLog,
 } from '../../services/mediaService';
+import { startupService, Startup } from '../../services/startupService';
 import { cn } from '../../lib/utils';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,14 +53,26 @@ export const ShareAssetModal = ({ isOpen, onClose, asset, onAssetUpdate }: Share
   const { fetchNotifications } = useNotifications();
 
   const isAgencyAsset = asset?.context === 'agency';
+  const [startup, setStartup] = React.useState<Startup | null>(null);
 
   React.useEffect(() => {
     if (isOpen) {
       setEmail(''); setPhone(''); setMessage(''); setIsCopied(null); setInviteEmail('');
       setActiveTab(isAgencyAsset ? 'team' : 'team');
       if (isAgencyAsset) loadTeamUsers();
+      // Load startup contact info if asset has a startupId
+      if (asset?.startupId) {
+        startupService.list().then(list => {
+          const found = list.find(s => s.id === asset.startupId);
+          setStartup(found ?? null);
+          if (found?.email) setEmail(found.email);
+          if (found?.whatsapp) setPhone(found.whatsapp);
+        }).catch(() => {});
+      } else {
+        setStartup(null);
+      }
     }
-  }, [isOpen, isAgencyAsset]);
+  }, [isOpen, isAgencyAsset, asset?.startupId]);
 
   const loadTeamUsers = async () => {
     setLoadingUsers(true);
@@ -415,10 +428,19 @@ export const ShareAssetModal = ({ isOpen, onClose, asset, onAssetUpdate }: Share
         {/* Email tab */}
         {activeTab === 'email' && (
           <form onSubmit={handleSendEmail} className="space-y-4">
+            {startup?.email && (
+              <div className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+                <Mail size={14} className="text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-widest">Startup Email</p>
+                  <p className="text-xs text-text font-bold">{startup.name} — {startup.email}</p>
+                </div>
+              </div>
+            )}
             <Input type="email" label="Recipient Email" placeholder="colleague@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Message (optional)</label>
-              <textarea placeholder="Add a personal message..." value={message} onChange={e => setMessage(e.target.value)}
+              <textarea placeholder="Add a personal message..." value={message} onChange={e => setMessage(e.target.value)} spellCheck
                 className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[80px] resize-none transition-all" />
             </div>
             <Button type="submit" className="w-full" disabled={isSending || !email}>
@@ -430,14 +452,37 @@ export const ShareAssetModal = ({ isOpen, onClose, asset, onAssetUpdate }: Share
         {/* WhatsApp tab */}
         {activeTab === 'whatsapp' && (
           <form onSubmit={handleSendWhatsApp} className="space-y-4">
+            {startup?.whatsapp && (
+              <div className="flex items-center gap-2 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+                <MessageCircle size={14} className="text-emerald-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Startup WhatsApp</p>
+                  <p className="text-xs text-text font-bold">{startup.name} — {startup.whatsapp}</p>
+                </div>
+              </div>
+            )}
             <Input type="tel" label="WhatsApp Number" placeholder="+1234567890 (include country code)" value={phone} onChange={e => setPhone(e.target.value)} required />
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Message (optional)</label>
-              <textarea placeholder="Add a personal message..." value={message} onChange={e => setMessage(e.target.value)}
+              <textarea placeholder="Add a personal message..." value={message} onChange={e => setMessage(e.target.value)} spellCheck
                 className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[80px] resize-none transition-all" />
             </div>
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500" disabled={isSending || !phone}>
-              {isSending ? <><Loader2 size={15} className="animate-spin mr-2" />Sending...</> : <><MessageCircle size={15} className="mr-2" />Send via WhatsApp</>}
+            {/* Direct WhatsApp link — no Twilio needed */}
+            {phone && (
+              <a
+                href={`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                  (message ? message + '\n\n' : '') +
+                  `${window.location.origin}/gallery/share/${asset?.id}`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full h-11 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm transition-all"
+              >
+                <ExternalLink size={15} /> Open in WhatsApp
+              </a>
+            )}
+            <Button type="submit" variant="outline" className="w-full" disabled={isSending || !phone}>
+              {isSending ? <><Loader2 size={15} className="animate-spin mr-2" />Sending...</> : <><Send size={15} className="mr-2" />Send via API</>}
             </Button>
           </form>
         )}

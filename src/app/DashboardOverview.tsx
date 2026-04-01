@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { MOCK_ACCOUNTS } from '../lib/mock-data';
 import { MediaCard } from '../components/cards/MediaCard';
 import { Button } from '../components/ui/Button';
 import { mediaService } from '../services/mediaService';
@@ -12,15 +11,17 @@ import { UploadMediaModal } from '../components/gallery/UploadMediaModal';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../components/ui/Toast';
 import {
-  ArrowRight, Clock, Layout,
-  ExternalLink, Instagram, Facebook, Twitter, Linkedin, Youtube,
-  Music2 as TikTok, Users, Image as ImageIcon, Loader2, Zap,
+  ArrowRight, Clock, ExternalLink, Instagram, Facebook, Twitter,
+  Linkedin, Youtube, Music2 as TikTok, Users, Image as ImageIcon, Loader2, Zap,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { requestDeleteMedia, acceptDeleteRequest } from '../services/mediaService';
+import { socialService } from '../services/socialService';
+import { postService } from '../services/postService';
+import api from '../services/api';
 
 const platformIcons: Record<string, any> = {
   Instagram, Facebook, Twitter, LinkedIn: Linkedin, YouTube: Youtube, TikTok,
@@ -31,12 +32,16 @@ export default function DashboardOverview() {
   const { canUploadAsset, canViewAsset } = usePermissions();
   const { user } = useAuth();
   const { toast } = useToast();
-  const connectedPlatforms = MOCK_ACCOUNTS.filter(a => a.status === 'connected');
 
   const [allMedia, setAllMedia] = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(true);
 
-  // Modal state — mirrors GalleryPage
+  // Real stat data
+  const [connectedAccountsCount, setConnectedAccountsCount] = useState<number | null>(null);
+  const [scheduledCount, setScheduledCount] = useState<number | null>(null);
+  const [avgEngagement, setAvgEngagement] = useState<string | null>(null);
+
+  // Modal state
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -47,10 +52,40 @@ export default function DashboardOverview() {
   const [parentForVariant, setParentForVariant] = useState<MediaAsset | undefined>(undefined);
 
   useEffect(() => {
-    if (!canViewAsset) { setMediaLoading(false); return; }
-    mediaService.getMedia().then(data => {
-      setAllMedia(data);
-    }).catch(() => {}).finally(() => setMediaLoading(false));
+    // 1. Media assets
+    if (canViewAsset) {
+      mediaService.getMedia().then(setAllMedia).catch(() => {}).finally(() => setMediaLoading(false));
+    } else {
+      setMediaLoading(false);
+    }
+
+    // 2. Connected social accounts (real)
+    socialService.getAccounts()
+      .then(accs => setConnectedAccountsCount(accs.filter(a => a.isActive).length))
+      .catch(() => setConnectedAccountsCount(0));
+
+    // 3. Scheduled: posts with status=scheduled + assets whose targetDate has passed (due)
+    Promise.all([
+      postService.getAll('scheduled').catch(() => []),
+      mediaService.getMedia().catch(() => []),
+    ]).then(([posts, assets]) => {
+      const now = new Date();
+      // Assets whose targetDate is today or in the past (due for posting)
+      const dueAssets = assets.filter(a => a.targetDate && new Date(a.targetDate) <= now);
+      setScheduledCount(posts.length + dueAssets.length);
+    }).catch(() => setScheduledCount(0));
+
+    // 4. Avg engagement from analytics
+    api.get('/analytics/social').then(({ data }) => {
+      const total = data.summary?.totalPosts || 0;
+      if (total > 0) {
+        // Simple engagement rate: (published posts / total posts) * 100
+        const rate = ((data.summary.totalPosts / Math.max(data.summary.totalPosts + data.summary.totalScheduled + data.summary.totalDrafts, 1)) * 100).toFixed(1);
+        setAvgEngagement(`${rate}%`);
+      } else {
+        setAvgEngagement('—');
+      }
+    }).catch(() => setAvgEngagement('—'));
   }, [canViewAsset]);
 
   const recentMedia = allMedia.slice(0, 6);
@@ -112,9 +147,27 @@ export default function DashboardOverview() {
             trend: 'up',
             icon: ImageIcon,
           },
-          { label: 'Scheduled', value: '42', change: '+5', trend: 'up', icon: Clock },
-          { label: 'Connected Accounts', value: connectedPlatforms.length.toString(), change: '0', trend: 'neutral', icon: Users },
-          { label: 'Avg. Engagement', value: '4.8%', change: '+0.4%', trend: 'up', icon: Zap },
+          {
+            label: 'Scheduled & Due',
+            value: scheduledCount === null ? '—' : scheduledCount.toString(),
+            change: scheduledCount === null ? '' : `${scheduledCount} items`,
+            trend: 'up',
+            icon: Clock,
+          },
+          {
+            label: 'Connected Accounts',
+            value: connectedAccountsCount === null ? '—' : connectedAccountsCount.toString(),
+            change: connectedAccountsCount === null ? '' : `${connectedAccountsCount} active`,
+            trend: 'neutral',
+            icon: Users,
+          },
+          {
+            label: 'Avg. Engagement',
+            value: avgEngagement ?? '—',
+            change: avgEngagement && avgEngagement !== '—' ? 'from posts' : '',
+            trend: 'up',
+            icon: Zap,
+          },
         ].map((stat, i) => (
           <motion.div key={i} whileHover={{ y: -5 }}
             className="glass border border-white/10 p-4 sm:p-6 rounded-[20px] sm:rounded-[24px] space-y-3 sm:space-y-4 cursor-pointer group hover:border-primary/30 transition-all">
@@ -177,7 +230,7 @@ export default function DashboardOverview() {
                   onDelete={(a) => { setSelectedAsset(a); setIsDeleteOpen(true); }}
                   onShare={(a) => { setSelectedAsset(a); setIsShareOpen(true); }}
                   onAddVariant={(a) => { setParentForVariant(a); setIsUploadOpen(true); }}
-                  onSchedule={(a) => navigate('/composer', { state: { asset: a } })}
+                  onSchedule={(a) => navigate('/composer', { state: { asset: a, date: a.targetDate ? a.targetDate.split('T')[0] : undefined } })}
                 />
               ))}
             </div>

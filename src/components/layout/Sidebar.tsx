@@ -44,7 +44,7 @@ export const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
     return features[item.featureKey as keyof typeof features] !== false;
   });
 
-  const startupsItem = isAgency
+  const startupsItem = isAgency && user?.agency?.enableStartups
     ? { icon: Building2, label: 'Startups', path: '/startups' }
     : null;
 
@@ -60,8 +60,8 @@ export const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
       {/* Logo + theme toggle */}
       <div className={cn('p-4 flex items-center border-b border-border', collapsed ? 'flex-col gap-3 py-5' : 'justify-between')}>
         {!collapsed
-          ? <Logo size="sm" />
-          : <Logo size="sm" showText={false} className="mx-auto" />
+          ? <Logo size="md" />
+          : <Logo size="sm" className="mx-auto" />
         }
         <button
           onClick={toggleTheme}

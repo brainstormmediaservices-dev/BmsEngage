@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, Building2, X, Check, Loader2, Camera } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, X, Check, Loader2, Camera, Phone, Mail, MessageCircle } from 'lucide-react';
 import { startupService, Startup } from '../services/startupService';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,7 +13,7 @@ export default function StartupsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({ name: '', description: '', phone: '', whatsapp: '', email: '' });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,7 +37,7 @@ export default function StartupsPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ name: '', description: '' });
+    setForm({ name: '', description: '', phone: '', whatsapp: '', email: '' });
     setLogoFile(null);
     setLogoPreview(null);
     setShowForm(true);
@@ -45,7 +45,7 @@ export default function StartupsPage() {
 
   const openEdit = (s: Startup) => {
     setEditingId(s.id);
-    setForm({ name: s.name, description: s.description });
+    setForm({ name: s.name, description: s.description, phone: s.phone, whatsapp: s.whatsapp, email: s.email });
     setLogoFile(null);
     setLogoPreview(s.logo);
     setShowForm(true);
@@ -64,10 +64,10 @@ export default function StartupsPage() {
     try {
       let saved: Startup;
       if (editingId) {
-        saved = await startupService.update(editingId, form.name, form.description);
+        saved = await startupService.update(editingId, form);
         setStartups(prev => prev.map(s => s.id === editingId ? saved : s));
       } else {
-        saved = await startupService.create(form.name, form.description);
+        saved = await startupService.create(form);
         setStartups(prev => [saved, ...prev]);
       }
       // Upload logo if selected
@@ -152,8 +152,35 @@ export default function StartupsPage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Description</label>
               <textarea placeholder="Brief description..." value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))} spellCheck
                 className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[80px] resize-none transition-all" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <Phone size={11} /> Phone
+                </label>
+                <input type="tel" placeholder="+1 234 567 8900" value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <MessageCircle size={11} className="text-emerald-500" /> WhatsApp
+                </label>
+                <input type="tel" placeholder="+1 234 567 8900" value={form.whatsapp}
+                  onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))}
+                  className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <Mail size={11} /> Email
+                </label>
+                <input type="email" placeholder="contact@startup.com" value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 transition-all" />
+              </div>
             </div>
 
             <div className="flex justify-end gap-3">
@@ -212,7 +239,25 @@ export default function StartupsPage() {
 
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-text truncate">{s.name}</p>
-                {s.description && <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{s.description}</p>}
+                {s.description && <p className="text-xs text-text-muted mt-0.5 line-clamp-1">{s.description}</p>}
+                <div className="flex flex-wrap items-center gap-3 mt-1">
+                  {s.phone && (
+                    <a href={`tel:${s.phone}`} className="flex items-center gap-1 text-[10px] text-text-muted hover:text-primary transition-colors">
+                      <Phone size={10} /> {s.phone}
+                    </a>
+                  )}
+                  {s.whatsapp && (
+                    <a href={`https://wa.me/${s.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-[10px] text-emerald-500 hover:text-emerald-400 transition-colors">
+                      <MessageCircle size={10} /> WhatsApp
+                    </a>
+                  )}
+                  {s.email && (
+                    <a href={`mailto:${s.email}`} className="flex items-center gap-1 text-[10px] text-text-muted hover:text-primary transition-colors">
+                      <Mail size={10} /> {s.email}
+                    </a>
+                  )}
+                </div>
                 <p className="text-[10px] text-text-muted mt-1 uppercase tracking-widest">
                   Added {new Date(s.createdAt).toLocaleDateString()}
                 </p>

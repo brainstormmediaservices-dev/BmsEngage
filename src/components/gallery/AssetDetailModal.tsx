@@ -6,14 +6,14 @@ import {
   Download, Share2, History, ChevronDown, ChevronUp, ExternalLink,
   Clock, Maximize2, Edit2, MessageSquare, AlertCircle, CheckCircle2,
   Trash2, Send, Loader2, Plus, Reply, Smile,
-} from 'lucide-react';
-import { MediaAsset, MediaVariant } from '../../types/media';
+} from 'lucide-react';import { MediaAsset, MediaVariant } from '../../types/media';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../ui/Toast';
 import { addComment, deleteComment, addCorrection, resolveCorrection, deleteCorrection, replyToComment, reactToComment, approveAsset } from '../../services/mediaService';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface AssetDetailModalProps {
   isOpen: boolean;
@@ -36,6 +36,7 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
   const [rightTab, setRightTab] = React.useState<RightTab>('info');
   const previewRef = React.useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // local copy so we can update comments/corrections without closing modal
   const [localAsset, setLocalAsset] = React.useState<MediaAsset | null>(null);
@@ -297,7 +298,7 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                     <p className="text-sm font-bold text-text">{metadata.fileType} Asset</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={handleDownload} disabled={isDownloading}>
                     {isDownloading ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}><Clock size={16} /></motion.div> : <Download size={16} />}
                     <span className="ml-2 hidden sm:inline">Download</span>
@@ -305,6 +306,19 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                   <Button variant="outline" size="sm" onClick={() => localAsset && onShare(localAsset)}>
                     <Share2 size={16} /><span className="ml-2 hidden sm:inline">Share</span>
                   </Button>
+                  {isUploader && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => { onEdit(localAsset); onClose(); }}>
+                        <Edit2 size={16} /><span className="ml-2 hidden sm:inline">Edit</span>
+                      </Button>
+                      <Button size="sm" onClick={() => {
+                        navigate('/composer', { state: { asset: localAsset, date: localAsset.targetDate ? localAsset.targetDate.split('T')[0] : undefined } });
+                        onClose();
+                      }} className="shadow-lg shadow-primary/30">
+                        <Calendar size={16} /><span className="ml-2 hidden sm:inline">Schedule</span>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -353,6 +367,19 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
               </div>
 
               <div className="pt-4 border-t border-border space-y-3">
+                {/* Workflow status badge */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Workflow Status</span>
+                  <span className={cn('px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest',
+                    localAsset.status === 'Approved'            ? 'bg-emerald-500/10 text-emerald-500' :
+                    localAsset.status === 'Corrected'           ? 'bg-cyan-500/10 text-cyan-400' :
+                    localAsset.status === 'Sent for Correction' ? 'bg-orange-500/10 text-orange-400' :
+                    localAsset.status === 'Archived'            ? 'bg-white/5 text-text-muted' :
+                                                                  'bg-blue-500/10 text-blue-400'
+                  )}>
+                    {localAsset.status}
+                  </span>
+                </div>
                 {[
                   [<Calendar size={14} />, 'Uploaded on', new Date(metadata.createdDate).toLocaleDateString()],
                   [<User size={14} />, 'Uploaded by', localAsset.uploadedBy],
@@ -384,19 +411,18 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                       {localAsset.approvalStatus === 'pending' ? 'Awaiting Approval' : localAsset.approvalStatus}
                     </span>
                   </div>
-                  {/* Approve/Reject buttons — Production/Marketing/Executive only */}
+                  {/* Approve/Reject buttons — Production/Marketing/Executive only
+                      Show when: pending, corrected, or rejected (i.e. not yet approved) */}
                   {canApproveAsset && localAsset.approvalStatus !== 'approved' && (
                     <div className="flex gap-1.5">
                       <button onClick={() => handleApprove('approved')} disabled={approvingStatus !== null}
                         className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40">
                         <CheckCircle2 size={10} /> Approve
                       </button>
-                      {localAsset.approvalStatus !== 'rejected' && (
-                        <button onClick={() => handleApprove('rejected')} disabled={approvingStatus !== null}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40">
-                          <AlertCircle size={10} /> Reject
-                        </button>
-                      )}
+                      <button onClick={() => handleApprove('rejected')} disabled={approvingStatus !== null}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-[10px] font-bold transition-all disabled:opacity-40">
+                        <AlertCircle size={10} /> Reject
+                      </button>
                     </div>
                   )}
                   {canApproveAsset && localAsset.approvalStatus === 'approved' && (
@@ -539,6 +565,7 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                   placeholder="Add a comment..."
                   rows={2}
                   disabled={!canComment}
+                  spellCheck
                   className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-text placeholder:text-text-muted outline-none focus:border-primary/50 resize-none transition-all disabled:opacity-40"
                 />
                 <button onClick={handleAddComment} disabled={!commentText.trim() || submitting || !canComment}

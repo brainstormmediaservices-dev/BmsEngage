@@ -1,25 +1,17 @@
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { 
-  ArrowRight, 
-  Layers, 
-  Calendar, 
-  BarChart3, 
-  Share2, 
-  CheckCircle2, 
-  Zap, 
-  Shield, 
-  Globe,
-  Users,
-  Smartphone,
-  Play
+import {
+  ArrowRight, Layers, Calendar, BarChart3, Share2, CheckCircle2,
+  Zap, Shield, Globe, Users, Smartphone, Play, LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { MarketingNavbar } from '../components/layout/MarketingNavbar';
 import { Logo } from '../components/ui/Logo';
 import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuth();
   return (
     <div className="min-h-screen bg-background text-text selection:bg-primary/30 overflow-x-hidden">
       <MarketingNavbar />
@@ -45,11 +37,19 @@ export default function LandingPage() {
               BMS Engage is the all-in-one platform to organize your media, schedule posts across all platforms, and track performance with precision.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-              <Link to="/register">
-                <Button size="lg" className="h-16 px-10 text-xl font-bold shadow-2xl shadow-primary/40">
-                  Start Free Trial <ArrowRight className="ml-2" size={24} />
-                </Button>
-              </Link>
+              {isAuthenticated ? (
+                <Link to="/dashboard">
+                  <Button size="lg" className="h-16 px-10 text-xl font-bold shadow-2xl shadow-primary/40">
+                    <LayoutDashboard className="mr-2" size={22} /> Go to Dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <Link to="/register">
+                  <Button size="lg" className="h-16 px-10 text-xl font-bold shadow-2xl shadow-primary/40">
+                    Start Free Trial <ArrowRight className="ml-2" size={24} />
+                  </Button>
+                </Link>
+              )}
               <Button variant="outline" size="lg" className="h-16 px-10 text-xl font-bold border-border hover:bg-primary/5">
                 <Play className="mr-2 fill-current" size={20} /> Book Demo
               </Button>
@@ -227,9 +227,17 @@ export default function LandingPage() {
               Join 500+ agencies that are already using BMS Engage to power their creative workflows.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-              <Button size="lg" className="h-16 px-12 text-xl font-bold bg-white text-primary hover:bg-white/90">
-                Get Started Free
-              </Button>
+              {isAuthenticated ? (
+                <Link to="/dashboard">
+                  <Button size="lg" className="h-16 px-12 text-xl font-bold bg-white text-primary hover:bg-white/90">
+                    <LayoutDashboard className="mr-2" size={20} /> Go to Dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <Button size="lg" className="h-16 px-12 text-xl font-bold bg-white text-primary hover:bg-white/90">
+                  Get Started Free
+                </Button>
+              )}
               <Button variant="outline" size="lg" className="h-16 px-12 text-xl font-bold border-white/20 hover:bg-white/10">
                 Talk to Sales
               </Button>
@@ -243,7 +251,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto grid md:grid-cols-4 gap-12">
           <div className="col-span-2">
             <div className="flex items-center gap-2 mb-8">
-              <Logo size="md" />
+              <Logo size="lg" />
             </div>
             <p className="text-text-muted max-w-xs leading-relaxed mb-8">
               The premium creative media agency platform for modern teams. Your complete media operations & content publishing system.

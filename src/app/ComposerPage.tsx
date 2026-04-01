@@ -1,535 +1,452 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Image as ImageIcon, 
-  Calendar, 
-  Send, 
-  Hash, 
-  Smile, 
-  MapPin, 
-  ChevronDown, 
-  X, 
-  Clock, 
-  Globe, 
-  ShieldCheck, 
-  Plus, 
-  MoreVertical, 
-  Heart, 
-  MessageSquare, 
-  Upload, 
-  Sparkles,
-  Share2,
-  Check,
-  ChevronRight,
-  ChevronLeft,
-  Layout,
-  Repeat,
-  Info,
-  Monitor,
-  Maximize2
+import {
+  ImageIcon, Calendar, Send, Hash, Smile, MapPin,
+  Globe, Sparkles, Check, ChevronLeft, Layout, Loader2, Search, X,
 } from 'lucide-react';
+import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { Button } from '../components/ui/Button';
-import { MOCK_ACCOUNTS } from '../lib/mock-data';
 import { cn } from '../lib/utils';
 import { useToast } from '../components/ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
 import { MiniGallerySelector } from '../components/gallery/MiniGallerySelector';
 import { BestTimeModal } from '../components/scheduler/BestTimeModal';
+import { socialService, ConnectedAccount } from '../services/socialService';
+import { postService } from '../services/postService';
+import { MediaAsset } from '../types/media';
+import { useTheme } from '../lib/ThemeContext';
+import api from '../services/api';
 
-const CONNECTED_PLATFORMS = Array.from(new Set(
-  MOCK_ACCOUNTS
-    .filter(acc => acc.status === 'connected')
-    .map(acc => acc.platform)
-));
+const PLATFORM_MAP: Record<string, { label: string; dot: string; charLimit: number }> = {
+  meta:     { label: 'Facebook',  dot: 'bg-blue-500',  charLimit: 63206 },
+  twitter:  { label: 'Twitter/X', dot: 'bg-sky-400',   charLimit: 280 },
+  linkedin: { label: 'LinkedIn',  dot: 'bg-blue-700',  charLimit: 3000 },
+  tiktok:   { label: 'TikTok',    dot: 'bg-pink-500',  charLimit: 2200 },
+};
 
-const PLATFORMS = [
-  { id: 'Instagram', icon: 'Instagram' },
-  { id: 'Facebook', icon: 'Facebook' },
-  { id: 'Twitter', icon: 'Twitter' },
-  { id: 'LinkedIn', icon: 'LinkedIn' },
-  { id: 'YouTube', icon: 'YouTube' },
-  { id: 'TikTok', icon: 'TikTok' }
-].filter(p => CONNECTED_PLATFORMS.includes(p.id as any));
+interface PlatformCaption { caption: string; location: string; hashtags: string[] }
+const blank = (): PlatformCaption => ({ caption: '', location: '', hashtags: [] });
+
+// Nominatim geocoder for location search (free, no key)
+async function searchLocations(q: string): Promise<{ display_name: string; lat: string; lon: string }[]> {
+  if (!q.trim()) return [];
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=6`, {
+    headers: { 'Accept-Language': 'en' },
+  });
+  return res.json();
+}
 
 export default function ComposerPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
-  const [caption, setCaption] = useState('');
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(PLATFORMS.length > 0 ? [PLATFORMS[0].id] : []);
-  const [selectedAssets, setSelectedAssets] = useState<any[]>([]);
-  const [mediaSource, setMediaSource] = useState<'gallery' | 'upload'>('gallery');
+  const { theme } = useTheme();
+  const captionRef = useRef<HTMLTextAreaElement>(null);
+
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [differentiate, setDifferentiate] = useState(false);
+  const [platformCaptions, setPlatformCaptions] = useState<Record<string, PlatformCaption>>({});
+  const [sharedCaption, setSharedCaption] = useState('');
+  const [activePlatform, setActivePlatform] = useState('');
+  const [selectedAssets, setSelectedAssets] = useState<MediaAsset[]>([]);
   const [isScheduled, setIsScheduled] = useState(true);
-  const [scheduledDateTime, setScheduledDateTime] = useState<string>('');
-  const [timezone, setTimezone] = useState('GMT+0 (London)');
-  const [isScheduling, setIsScheduling] = useState(false);
-  const [activePreviewPlatform, setActivePreviewPlatform] = useState(PLATFORMS.length > 0 ? PLATFORMS[0].id : '');
-  const [previewMode, setPreviewMode] = useState<'desktop' | 'full'>('desktop');
+  const [scheduledDateTime, setScheduledDateTime] = useState('');
+  const [activePreview, setActivePreview] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [showHashtagPicker, setShowHashtagPicker] = useState(false);
-  const [isBestTimeModalOpen, setIsBestTimeModalOpen] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [isBestTimeOpen, setIsBestTimeOpen] = useState(false);
 
-  const handleUpload = () => {
-    setIsUploading(true);
-    setUploadProgress(0);
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          const newAsset = {
-            id: Date.now().toString(),
-            title: 'Uploaded Asset',
-            url: 'https://picsum.photos/seed/upload/800/600',
-            category: 'Image',
-            metadata: { fileType: 'JPG', fileSize: '1.2MB' }
-          };
-          setSelectedAssets([newAsset]);
-          toast('Asset uploaded and attached!', 'success');
-          setMediaSource('gallery');
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 200);
-  };
+  // Emoji picker
+  const [showEmoji, setShowEmoji] = useState(false);
 
+  // Location picker
+  const [showLocation, setShowLocation] = useState(false);
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationResults, setLocationResults] = useState<{ display_name: string; lat: string; lon: string }[]>([]);
+  const [searchingLocation, setSearchingLocation] = useState(false);
+
+  // Hashtag picker
+  const [showHashtag, setShowHashtag] = useState(false);
+  const [hashtagSearch, setHashtagSearch] = useState('');
+  const [assetTags, setAssetTags] = useState<string[]>([]);
+
+  // Load connected accounts
   useEffect(() => {
-    if (location.state) {
-      if (location.state.asset) {
-        setSelectedAssets([location.state.asset]);
+    socialService.getAccounts().then(accs => {
+      const active = accs.filter(a => a.isActive);
+      setAccounts(active);
+      if (active.length > 0) {
+        const first = active[0].platform;
+        setSelectedPlatforms([first]);
+        setActivePreview(first);
+        setActivePlatform(first);
+        const caps: Record<string, PlatformCaption> = {};
+        active.forEach(a => { caps[a.platform] = blank(); });
+        setPlatformCaptions(caps);
       }
-      if (location.state.date) {
-        const date = location.state.date;
-        const now = new Date();
-        const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-        setScheduledDateTime(`${date}T${time}`);
-        
-        if (location.state.isPast) {
-          toast('Scheduling for a past date will publish the post immediately.', 'warning');
-        }
-      }
-      if (location.state.post) {
-        const post = location.state.post;
-        setCaption(post.content);
-        setSelectedPlatforms(post.platforms);
-        if (post.mediaUrls?.[0]) {
-          setSelectedAssets([{ id: 'existing', url: post.mediaUrls[0], title: 'Existing Media' }]);
-        }
-        if (post.scheduledDate) {
-          setScheduledDateTime(post.scheduledDate.substring(0, 16));
-        }
-      }
-    } else {
-      // Default to tomorrow 10:30 AM
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const dateStr = tomorrow.toISOString().split('T')[0];
-      setScheduledDateTime(`${dateStr}T10:30`);
+    }).catch(() => {}).finally(() => setLoadingAccounts(false));
+  }, []);
+
+  // Handle navigation state
+  useEffect(() => {
+    if (!location.state) {
+      const t = new Date(); t.setDate(t.getDate() + 1);
+      setScheduledDateTime(`${t.toISOString().split('T')[0]}T10:30`);
+      return;
     }
+    const { asset, date, post } = location.state as any;
+    if (asset) {
+      setSelectedAssets([asset]);
+      setAssetTags(asset.tags || []);
+      // Default scheduled date = asset's targetDate if no explicit date passed
+      if (!date && asset.targetDate) {
+        const td = asset.targetDate.split('T')[0];
+        const n = new Date();
+        setScheduledDateTime(`${td}T${n.getHours().toString().padStart(2,'0')}:${n.getMinutes().toString().padStart(2,'0')}`);
+        setIsScheduled(true);
+      }
+    }
+    if (date) {
+      const n = new Date();
+      setScheduledDateTime(`${date}T${n.getHours().toString().padStart(2,'0')}:${n.getMinutes().toString().padStart(2,'0')}`);
+      setIsScheduled(true);
+    }
+    if (post) { setSharedCaption(post.content || ''); if (post.scheduledDate) setScheduledDateTime(post.scheduledDate.substring(0,16)); }
   }, [location.state]);
 
-  const togglePlatform = (platform: string) => {
+  // When asset selected, update tags
+  useEffect(() => {
+    if (selectedAssets[0]) setAssetTags(selectedAssets[0].tags || []);
+  }, [selectedAssets]);
+
+  // Location search debounce
+  useEffect(() => {
+    if (!locationSearch.trim()) { setLocationResults([]); return; }
+    const t = setTimeout(async () => {
+      setSearchingLocation(true);
+      try { setLocationResults(await searchLocations(locationSearch)); }
+      catch { setLocationResults([]); }
+      finally { setSearchingLocation(false); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [locationSearch]);
+
+  const togglePlatform = (p: string) => {
     setSelectedPlatforms(prev => {
-      const next = prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform];
-      if (next.length > 0 && !next.includes(activePreviewPlatform)) {
-        setActivePreviewPlatform(next[0]);
-      }
+      const next = prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p];
+      if (next.length > 0 && !next.includes(activePreview)) setActivePreview(next[0]);
+      if (next.length > 0 && !next.includes(activePlatform)) setActivePlatform(next[0]);
       return next;
     });
   };
 
-  const handleSchedule = () => {
-    if (selectedPlatforms.length === 0) {
-      toast('Please select at least one platform.', 'error');
-      return;
-    }
-    if (!caption && selectedAssets.length === 0) {
-      toast('Please add some content or media before scheduling.', 'error');
-      return;
-    }
-    if (isScheduled && !scheduledDateTime) {
-      toast('Please select a date and time for scheduling.', 'error');
-      return;
-    }
-    
-    setIsScheduling(true);
-    setTimeout(() => {
-      setIsScheduling(false);
-      toast(isScheduled ? 'Post scheduled successfully!' : 'Post published successfully!', 'success');
-      navigate('/scheduler');
-    }, 1500);
+  const getCaption = (p?: string) => {
+    if (!differentiate) return sharedCaption;
+    return platformCaptions[p || activePlatform]?.caption || '';
   };
 
-  const generateAICaption = () => {
-    setIsGeneratingAI(true);
-    setTimeout(() => {
-      const suggestions = [
-        "Elevate your brand with BMS. 🚀 Our creative solutions are designed to make you stand out. #BMSCreative #MarketingStrategy",
-        "Behind the scenes at BMS! 🎬 See how we bring your vision to life. #CreativeAgency #BMS",
-        "Ready to scale? 📈 Let's build something amazing together. #GrowthMindset #BMS"
-      ];
-      setCaption(suggestions[Math.floor(Math.random() * suggestions.length)]);
-      setIsGeneratingAI(false);
-      toast('AI caption generated!', 'success');
-    }, 1200);
+  const setCaption = (val: string, p?: string) => {
+    if (!differentiate) { setSharedCaption(val); return; }
+    const key = p || activePlatform;
+    setPlatformCaptions(prev => ({ ...prev, [key]: { ...prev[key], caption: val } }));
   };
 
-  const suggestBestTime = () => {
-    setIsBestTimeModalOpen(true);
+  const insertAtCursor = (text: string) => {
+    const ta = captionRef.current;
+    if (!ta) { setCaption(getCaption() + text); return; }
+    const s = ta.selectionStart ?? getCaption().length;
+    const e = ta.selectionEnd ?? s;
+    const cur = getCaption();
+    setCaption(cur.slice(0, s) + text + cur.slice(e));
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(s + text.length, s + text.length); }, 0);
   };
 
-  const handleBestTimeSelect = (time: string) => {
-    const [date] = scheduledDateTime.split('T');
-    setScheduledDateTime(`${date}T${time}`);
-    toast(`Optimized for peak engagement at ${time}`, 'success');
+  const addHashtag = (tag: string) => {
+    const ht = tag.startsWith('#') ? tag : `#${tag}`;
+    insertAtCursor(` ${ht}`);
+    setShowHashtag(false);
+    setHashtagSearch('');
   };
 
-  const renderPreview = () => {
+  const addLocation = (name: string) => {
+    insertAtCursor(` 📍 ${name}`);
+    setShowLocation(false);
+    setLocationSearch('');
+    setLocationResults([]);
+  };
+
+  const onEmojiClick = (data: EmojiClickData) => {
+    insertAtCursor(data.emoji);
+    setShowEmoji(false);
+  };
+
+  const generateAI = async () => {
     const asset = selectedAssets[0];
-    const mediaUrl = asset?.url || asset?.variants?.[0]?.url;
+    const existingCaption = getCaption();
 
-    switch (activePreviewPlatform) {
-      case 'Instagram':
-        return (
-          <div className="bg-card rounded-[32px] border border-white/10 overflow-hidden shadow-2xl max-w-[340px] mx-auto">
-            <div className="p-4 flex items-center gap-3 border-b border-white/5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 to-fuchsia-600 p-[2px]">
-                <div className="w-full h-full rounded-full bg-card border-2 border-card flex items-center justify-center text-[10px] font-black">B</div>
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-bold text-text">bms_agency</p>
-                <p className="text-[10px] text-text-muted">London, UK</p>
-              </div>
-              <MoreVertical size={16} className="text-text-muted" />
-            </div>
-            <div className="aspect-square bg-white/5 flex items-center justify-center">
-              {mediaUrl ? (
-                <img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <ImageIcon size={48} className="opacity-10" />
-              )}
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 text-text">
-                  <Heart size={20} />
-                  <MessageSquare size={20} />
-                  <Send size={20} />
-                </div>
-                <div className="w-5 h-5 border-2 border-text rounded-sm" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-text">1,482 likes</p>
-                <div className="text-xs leading-relaxed">
-                  <span className="font-bold mr-2">bms_agency</span>
-                  <span className="text-text-muted">{caption || "Your caption will appear here..."}</span>
-                </div>
-                <p className="text-[10px] text-text-muted uppercase tracking-tighter mt-2">Just now</p>
-              </div>
-            </div>
-          </div>
-        );
-      case 'Facebook':
-        return (
-          <div className="bg-card rounded-2xl border border-white/10 overflow-hidden shadow-2xl max-w-[380px] mx-auto">
-            <div className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">B</div>
-              <div>
-                <p className="text-sm font-bold text-text">BMS Creative Agency</p>
-                <p className="text-xs text-text-muted flex items-center gap-1">Just now • <Globe size={12} /></p>
-              </div>
-            </div>
-            <div className="px-4 pb-3 text-sm text-text">
-              {caption || "What's on your mind?"}
-            </div>
-            <div className="aspect-video bg-white/5 flex items-center justify-center">
-              {mediaUrl ? (
-                <img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <ImageIcon size={48} className="opacity-10" />
-              )}
-            </div>
-            <div className="p-3 border-t border-white/5 flex items-center justify-around text-text-muted">
-              <div className="flex items-center gap-2 text-xs font-bold"><Heart size={16} /> Like</div>
-              <div className="flex items-center gap-2 text-xs font-bold"><MessageSquare size={16} /> Comment</div>
-              <div className="flex items-center gap-2 text-xs font-bold"><Share2 size={16} /> Share</div>
-            </div>
-          </div>
-        );
-      case 'Twitter':
-        return (
-          <div className="bg-card rounded-2xl border border-white/10 p-4 shadow-2xl max-w-[380px] mx-auto space-y-3">
-            <div className="flex gap-3">
-              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-xl font-black">B</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-sm text-text truncate">BMS Agency</span>
-                  <span className="text-text-muted text-xs">@bms_agency • now</span>
-                </div>
-                <p className="text-sm text-text mt-1 leading-relaxed">{caption || "Drafting a new tweet..."}</p>
-                {mediaUrl && (
-                  <div className="mt-3 rounded-2xl overflow-hidden border border-white/10 aspect-video">
-                    <img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                )}
-                <div className="flex items-center justify-between mt-4 text-text-muted max-w-xs">
-                  <MessageSquare size={16} />
-                  <Repeat size={16} />
-                  <Heart size={16} />
-                  <Layout size={16} />
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 'LinkedIn':
-        return (
-          <div className="bg-card rounded-xl border border-white/10 shadow-2xl max-w-[400px] mx-auto overflow-hidden">
-            <div className="p-4 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold">BMS</div>
-              <div>
-                <p className="text-sm font-bold text-text">BMS Creative Agency</p>
-                <p className="text-xs text-text-muted">Creative Media & Marketing Solutions</p>
-                <p className="text-[10px] text-text-muted flex items-center gap-1">Now • <Globe size={10} /></p>
-              </div>
-            </div>
-            <div className="px-4 pb-3 text-sm text-text">
-              {caption || "Share professional updates..."}
-            </div>
-            {mediaUrl && (
-              <div className="border-y border-white/5 bg-white/5">
-                <img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              </div>
-            )}
-            <div className="p-3 flex items-center gap-6 text-text-muted">
-              <div className="flex items-center gap-2 text-xs font-bold"><Heart size={18} /> Like</div>
-              <div className="flex items-center gap-2 text-xs font-bold"><MessageSquare size={18} /> Comment</div>
-              <div className="flex items-center gap-2 text-xs font-bold"><Repeat size={18} /> Repost</div>
-              <div className="flex items-center gap-2 text-xs font-bold"><Send size={18} /> Send</div>
-            </div>
-          </div>
-        );
-      default:
-        return null;
+    // Case 1: no asset selected AND no caption typed → require one or the other
+    if (!asset && !existingCaption.trim()) {
+      toast('Please select an asset from the gallery first, or type a caption to rewrite with AI.', 'error');
+      return;
     }
+
+    setIsGeneratingAI(true);
+    try {
+      let payload: { title?: string; tags?: string[]; existingCaption?: string; platform: string };
+
+      if (asset) {
+        // Asset selected → use its name + tags to generate fresh caption
+        payload = { title: asset.title, tags: asset.tags || [], platform: activePlatform };
+      } else {
+        // No asset but user typed something → rewrite existing caption for social media
+        payload = { existingCaption: existingCaption.trim(), platform: activePlatform };
+      }
+
+      const { data } = await api.post('/ai/caption', payload);
+      const caption = data.caption || '';
+      if (!caption) { toast('AI returned empty caption', 'error'); return; }
+      if (differentiate) {
+        selectedPlatforms.forEach(p => setPlatformCaptions(prev => ({ ...prev, [p]: { ...prev[p], caption } })));
+      } else {
+        setSharedCaption(caption);
+      }
+      toast('Caption generated!', 'success');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.error;
+      if (status === 400) {
+        toast(msg || 'Please provide more context before generating a caption.', 'error');
+      } else if (status === 422) {
+        toast(msg || 'The AI could not generate a meaningful caption. Try adding more descriptive tags to your asset.', 'error');
+      } else if (status === 503) {
+        toast('AI service unavailable. Add an OPENAI_API_KEY or HUGGINGFACE_API_KEY to your backend .env and restart.', 'error');
+      } else {
+        toast(msg || 'AI generation failed. Please try again.', 'error');
+      }
+    } finally { setIsGeneratingAI(false); }
+  };
+
+  const handleSchedule = async () => {
+    if (!selectedPlatforms.length) { toast('Select at least one platform', 'error'); return; }
+    const caption = getCaption();
+    if (!caption && !selectedAssets.length) { toast('Add content or media', 'error'); return; }
+    if (isScheduled && !scheduledDateTime) { toast('Select a date and time', 'error'); return; }
+    setIsScheduling(true);
+    try {
+      await postService.create({
+        content: caption,
+        platforms: selectedPlatforms,
+        scheduledTime: isScheduled ? new Date(scheduledDateTime).toISOString() : undefined,
+        mediaUrls: selectedAssets.map(a => a.url),
+      });
+      toast(isScheduled ? 'Post scheduled!' : 'Saved as draft!', 'success');
+      navigate('/scheduler');
+    } catch (err: any) {
+      toast(err?.response?.data?.error || 'Failed to schedule', 'error');
+    } finally { setIsScheduling(false); }
+  };
+
+  const currentCaption = getCaption();
+  const charLimit = PLATFORM_MAP[activePlatform]?.charLimit || 2200;
+  const filteredHashtags = [...new Set([...assetTags, 'Creative', 'Marketing', 'BrandStrategy', 'ContentCreator', 'DigitalMarketing', 'SocialMedia', 'Agency', 'Design'])]
+    .filter(t => !hashtagSearch || t.toLowerCase().includes(hashtagSearch.toLowerCase()));
+
+  // ── Preview ──────────────────────────────────────────────────────────────
+  const renderPreview = (p: string) => {
+    const asset = selectedAssets[0];
+    const mediaUrl = asset?.url;
+    const cap = getCaption(p);
+    const acc = accounts.find(a => a.platform === p);
+    const name = acc?.displayName || acc?.username || 'Your Account';
+
+    if (p === 'meta') return (
+      <div className="bg-card rounded-2xl border border-white/10 overflow-hidden max-w-[340px] mx-auto">
+        <div className="p-3 flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">{name[0]}</div>
+          <div><p className="text-xs font-bold text-text">{name}</p><p className="text-[9px] text-text-muted">Just now · <Globe size={9} className="inline" /></p></div>
+        </div>
+        <div className="px-3 pb-2 text-xs text-text">{cap || <span className="text-text-muted italic">Caption will appear here…</span>}</div>
+        {mediaUrl && <div className="aspect-video"><img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
+        <div className="p-2 border-t border-white/5 flex justify-around text-[10px] font-bold text-text-muted">
+          <span>👍 Like</span><span>💬 Comment</span><span>↗️ Share</span>
+        </div>
+      </div>
+    );
+    if (p === 'twitter') return (
+      <div className="bg-card rounded-2xl border border-white/10 p-4 max-w-[340px] mx-auto">
+        <div className="flex gap-3">
+          <div className="w-9 h-9 rounded-full bg-sky-400/20 flex items-center justify-center text-sky-400 font-black text-sm">{name[0]}</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-text">{name} <span className="text-text-muted font-normal">· now</span></p>
+            <p className="text-xs text-text mt-1 leading-relaxed">{cap || <span className="text-text-muted italic">Tweet will appear here…</span>}</p>
+            {mediaUrl && <div className="mt-2 rounded-xl overflow-hidden aspect-video border border-white/10"><img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
+          </div>
+        </div>
+      </div>
+    );
+    if (p === 'linkedin') return (
+      <div className="bg-card rounded-xl border border-white/10 max-w-[360px] mx-auto overflow-hidden">
+        <div className="p-3 flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-blue-700/20 flex items-center justify-center text-blue-400 font-bold">{name[0]}</div>
+          <div><p className="text-xs font-bold text-text">{name}</p><p className="text-[9px] text-text-muted">Now · <Globe size={9} className="inline" /></p></div>
+        </div>
+        <div className="px-3 pb-2 text-xs text-text">{cap || <span className="text-text-muted italic">Post will appear here…</span>}</div>
+        {mediaUrl && <div className="border-y border-white/5"><img src={mediaUrl} alt="" className="w-full object-cover" referrerPolicy="no-referrer" /></div>}
+      </div>
+    );
+    if (p === 'tiktok') return (
+      <div className="bg-black rounded-2xl border border-white/10 max-w-[200px] mx-auto overflow-hidden" style={{ aspectRatio: '9/16' }}>
+        <div className="relative w-full h-full flex items-center justify-center">
+          {mediaUrl ? <img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <div className="text-white/20 text-xs">Video</div>}
+          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+            <p className="text-white text-[9px] font-bold">@{acc?.username || 'you'}</p>
+            <p className="text-white/80 text-[8px] line-clamp-2">{cap || <span className="italic">Caption…</span>}</p>
+          </div>
+        </div>
+      </div>
+    );
+    return <div className="text-center text-text-muted text-xs py-8">Select a platform to preview</div>;
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10 pb-20">
+    <div className="max-w-7xl mx-auto space-y-5 pb-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-text mb-2">Post Composer</h1>
-          <p className="text-text-muted font-medium">Create, preview, and schedule content across all your social channels.</p>
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-text mb-1">Post Composer</h1>
+          <p className="text-sm text-text-muted">Create, preview, and schedule content across all your social channels.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-12 px-6 rounded-xl font-bold">
-            Save Draft
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="h-10 px-4 rounded-xl font-bold" onClick={() => navigate(-1)}>
+            <ChevronLeft size={15} className="mr-1" /> Back
           </Button>
-          <Button onClick={handleSchedule} isLoading={isScheduling} className="h-12 px-6 rounded-xl font-bold shadow-xl shadow-primary/30">
-            <Send size={18} className="mr-2" /> {isScheduled ? 'Schedule Post' : 'Publish Now'}
+          <Button onClick={handleSchedule} isLoading={isScheduling} className="h-10 px-5 rounded-xl font-bold shadow-xl shadow-primary/30">
+            <Send size={14} className="mr-2" /> {isScheduled ? 'Schedule' : 'Save Draft'}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Left: Editor Section */}
-        <div className="lg:col-span-7 space-y-8">
-          <div className="glass border border-border rounded-[32px] p-8 space-y-10">
-            {/* Media Source Selector */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg text-text flex items-center gap-2">
-                  <ImageIcon size={20} className="text-primary" /> Media Content
-                </h3>
-                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-                  <button
-                    onClick={() => setMediaSource('gallery')}
-                    className={cn(
-                      "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-                      mediaSource === 'gallery' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-text-muted hover:text-text"
-                    )}
-                  >
-                    Gallery
-                  </button>
-                  <button
-                    onClick={() => setMediaSource('upload')}
-                    className={cn(
-                      "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-                      mediaSource === 'upload' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-text-muted hover:text-text"
-                    )}
-                  >
-                    Upload New
-                  </button>
-                </div>
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* ── Left ─────────────────────────────────────────────────────── */}
+        <div className="lg:col-span-7 space-y-4">
+          <div className="glass border border-border rounded-[24px] p-5 sm:p-7 space-y-6">
 
-              <AnimatePresence mode="wait">
-                {mediaSource === 'gallery' ? (
-                  <motion.div
-                    key="gallery"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                  >
-                    <MiniGallerySelector 
-                      selectedAssets={selectedAssets}
-                      onSelect={(a) => setSelectedAssets([a])}
-                      onRemove={() => setSelectedAssets([])}
-                      multiple={false}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="upload"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    onClick={handleUpload}
-                    className="aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-[32px] flex flex-col items-center justify-center text-center p-8 group hover:bg-primary/5 hover:border-primary/50 transition-all cursor-pointer relative overflow-hidden"
-                  >
-                    {isUploading ? (
-                      <div className="w-full max-w-xs space-y-4">
-                        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-primary">
-                          <span>Uploading...</span>
-                          <span>{uploadProgress}%</span>
-                        </div>
-                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: `${uploadProgress}%` }}
-                            className="h-full bg-primary"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                          <Upload size={24} />
-                        </div>
-                        <p className="text-base font-bold text-text">Drag & drop to upload</p>
-                        <p className="text-xs text-text-muted">Supports JPG, PNG, MP4 up to 50MB</p>
-                      </>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            {/* Media */}
+            <div className="space-y-3">
+              <h3 className="font-bold text-sm text-text flex items-center gap-2"><ImageIcon size={16} className="text-primary" /> Media Content</h3>
+              <MiniGallerySelector selectedAssets={selectedAssets} onSelect={a => setSelectedAssets([a])} onRemove={() => setSelectedAssets([])} multiple={false} />
             </div>
 
-            {/* Platform Selection */}
-            <div className="space-y-4">
-              <h3 className="font-bold text-lg text-text flex items-center gap-2">
-                <Globe size={20} className="text-primary" /> Target Platforms
+            {/* Platforms */}
+            <div className="space-y-3">
+              <h3 className="font-bold text-sm text-text flex items-center gap-2">
+                <Globe size={16} className="text-primary" /> Target Platforms
+                {loadingAccounts && <Loader2 size={13} className="animate-spin text-text-muted" />}
               </h3>
-              <div className="flex flex-wrap gap-3">
-                {PLATFORMS.map(platform => (
-                  <button
-                    key={platform.id}
-                    onClick={() => togglePlatform(platform.id)}
-                    className={cn(
-                      "flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-300",
-                      selectedPlatforms.includes(platform.id)
-                        ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-[1.02]"
-                        : "bg-white/5 border-white/10 text-text-muted hover:border-white/20"
-                    )}
-                  >
-                    <span className="text-sm font-bold">{platform.id}</span>
-                    {selectedPlatforms.includes(platform.id) && <Check size={14} />}
+              {!loadingAccounts && accounts.length === 0 ? (
+                <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl text-xs text-amber-400">
+                  No connected accounts. <button onClick={() => navigate('/social-accounts')} className="underline font-bold">Connect →</button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {accounts.map(acc => {
+                    const cfg = PLATFORM_MAP[acc.platform];
+                    const sel = selectedPlatforms.includes(acc.platform);
+                    return (
+                      <button key={acc.id} onClick={() => togglePlatform(acc.platform)}
+                        className={cn('flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all text-xs font-bold',
+                          sel ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-white/5 border-white/10 text-text-muted hover:border-white/20')}>
+                        <span className={cn('w-2 h-2 rounded-full', cfg?.dot || 'bg-gray-400')} />
+                        {cfg?.label || acc.platform}
+                        {sel && <Check size={12} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Differentiate toggle */}
+            {selectedPlatforms.length > 1 && (
+              <div className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl">
+                <div>
+                  <p className="text-xs font-bold text-text">Differentiate per platform</p>
+                  <p className="text-[10px] text-text-muted">Custom caption, location, hashtags per platform</p>
+                </div>
+                <button onClick={() => setDifferentiate(d => !d)}
+                  className={cn('w-11 h-6 rounded-full relative transition-all', differentiate ? 'bg-primary' : 'bg-white/10')}>
+                  <motion.div animate={{ x: differentiate ? 20 : 2 }} className="absolute top-1 w-4 h-4 bg-white rounded-full shadow" />
+                </button>
+              </div>
+            )}
+
+            {/* Platform tabs when differentiate */}
+            {differentiate && selectedPlatforms.length > 1 && (
+              <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10 overflow-x-auto">
+                {selectedPlatforms.map(p => (
+                  <button key={p} onClick={() => setActivePlatform(p)}
+                    className={cn('shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                      activePlatform === p ? 'bg-primary text-white' : 'text-text-muted hover:text-text')}>
+                    {PLATFORM_MAP[p]?.label || p}
                   </button>
                 ))}
               </div>
-            </div>
+            )}
 
-            {/* Caption Editor */}
-            <div className="space-y-4">
+            {/* Caption */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg text-text">Caption</h3>
-                <span className={cn("text-xs font-bold px-2 py-1 rounded-lg", caption.length > 2000 ? "bg-red-500/10 text-red-500" : "bg-white/5 text-text-muted")}>
-                  {caption.length} / 2200
+                <h3 className="font-bold text-sm text-text">Caption</h3>
+                <span className={cn('text-xs font-bold px-2 py-0.5 rounded-lg', currentCaption.length > charLimit ? 'bg-red-500/10 text-red-500' : 'bg-white/5 text-text-muted')}>
+                  {currentCaption.length}/{charLimit}
                 </span>
               </div>
-              <div className="relative group">
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Tell your story... Add hashtags and mentions."
-                  className="w-full bg-white/5 border border-white/10 rounded-[32px] px-8 py-7 text-base text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[250px] resize-none leading-relaxed transition-all"
-                />
-                
-                {/* Caption Tools */}
-                <div className="absolute bottom-6 left-8 flex items-center gap-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={generateAICaption}
-                    isLoading={isGeneratingAI}
-                    className="bg-white/5 border-white/10 text-xs font-bold h-9"
-                  >
-                    <Sparkles size={14} className="mr-2 text-primary" /> Use AI to Write Caption
+              <div className="relative">
+                <textarea ref={captionRef} value={currentCaption} onChange={e => setCaption(e.target.value)}
+                  placeholder="Your caption will appear here after selecting an asset and generating with AI, or type manually…"
+                  spellCheck lang="en"
+                  className="w-full bg-white/5 border border-white/10 rounded-[20px] px-5 py-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[160px] resize-none leading-relaxed transition-all" />
+
+                {/* AI button */}
+                <div className="absolute bottom-3 left-4">
+                  <Button variant="outline" size="sm" onClick={generateAI} isLoading={isGeneratingAI}
+                    className="bg-white/5 border-white/10 text-xs font-bold h-8">
+                    <Sparkles size={12} className="mr-1.5 text-primary" />
+                    {selectedAssets[0] ? 'AI Caption' : currentCaption.trim() ? 'Rewrite with AI' : 'AI Caption'}
                   </Button>
                 </div>
 
-                <div className="absolute bottom-6 right-8 flex items-center gap-4 text-text-muted">
+                {/* Tool buttons */}
+                <div className="absolute bottom-3 right-4 flex items-center gap-1">
+                  {/* Location */}
                   <div className="relative">
-                    <button 
-                      onClick={() => setShowLocationPicker(!showLocationPicker)}
-                      className="hover:text-primary transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center gap-1.5"
-                    >
-                      <MapPin size={20} />
-                      <span className="text-[10px] font-bold uppercase hidden md:inline">Location</span>
+                    <button onClick={() => { setShowLocation(v => !v); setShowEmoji(false); setShowHashtag(false); }}
+                      className={cn('p-1.5 rounded-lg transition-colors', showLocation ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-primary hover:bg-white/5')}>
+                      <MapPin size={16} />
                     </button>
                     <AnimatePresence>
-                      {showLocationPicker && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute bottom-full right-0 mb-2 p-3 glass border border-white/10 rounded-2xl shadow-2xl z-50 w-48 space-y-2"
-                        >
-                          {['London, UK', 'New York, USA', 'Paris, France'].map(loc => (
-                            <button 
-                              key={loc}
-                              onClick={() => { setCaption(prev => prev + ' 📍 ' + loc); setShowLocationPicker(false); }}
-                              className="w-full text-left px-3 py-1.5 text-xs font-bold hover:bg-white/5 rounded-lg transition-colors"
-                            >
-                              {loc}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  <div className="relative">
-                    <button 
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="hover:text-primary transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center gap-1.5"
-                    >
-                      <Smile size={20} />
-                      <span className="text-[10px] font-bold uppercase hidden md:inline">Emoji</span>
-                    </button>
-                    <AnimatePresence>
-                      {showEmojiPicker && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute bottom-full right-0 mb-2 p-3 glass border border-white/10 rounded-2xl shadow-2xl z-50 w-48"
-                        >
-                          <div className="grid grid-cols-4 gap-2">
-                            {['🚀', '🔥', '✨', '💯', '🙌', '❤️', '⚡', '💡'].map(emoji => (
-                              <button 
-                                key={emoji}
-                                onClick={() => { setCaption(prev => prev + emoji); setShowEmojiPicker(false); }}
-                                className="text-xl hover:scale-125 transition-transform"
-                              >
-                                {emoji}
+                      {showLocation && (
+                        <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          className="absolute bottom-full right-0 mb-2 glass border border-white/10 rounded-2xl shadow-2xl z-50 w-64 overflow-hidden">
+                          <div className="p-2 border-b border-white/10">
+                            <div className="relative">
+                              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                              <input autoFocus value={locationSearch} onChange={e => setLocationSearch(e.target.value)}
+                                placeholder="Search location…" spellCheck
+                                className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text placeholder:text-text-muted outline-none focus:border-primary/50" />
+                            </div>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto">
+                            {searchingLocation && <div className="p-3 text-center"><Loader2 size={14} className="animate-spin text-primary mx-auto" /></div>}
+                            {!searchingLocation && locationResults.length === 0 && locationSearch && (
+                              <p className="p-3 text-xs text-text-muted text-center">No results. Try a different search.</p>
+                            )}
+                            {locationResults.map((r, i) => (
+                              <button key={i} onClick={() => addLocation(r.display_name.split(',').slice(0,2).join(',').trim())}
+                                className="w-full text-left px-3 py-2 text-xs text-text hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
+                                📍 {r.display_name.split(',').slice(0,3).join(', ')}
                               </button>
                             ))}
                           </div>
@@ -538,31 +455,52 @@ export default function ComposerPage() {
                     </AnimatePresence>
                   </div>
 
+                  {/* Emoji */}
                   <div className="relative">
-                    <button 
-                      onClick={() => setShowHashtagPicker(!showHashtagPicker)}
-                      className="hover:text-primary transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center gap-1.5"
-                    >
-                      <Hash size={20} />
-                      <span className="text-[10px] font-bold uppercase hidden md:inline">Hashtags</span>
+                    <button onClick={() => { setShowEmoji(v => !v); setShowLocation(false); setShowHashtag(false); }}
+                      className={cn('p-1.5 rounded-lg transition-colors', showEmoji ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-primary hover:bg-white/5')}>
+                      <Smile size={16} />
                     </button>
                     <AnimatePresence>
-                      {showHashtagPicker && (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          className="absolute bottom-full right-0 mb-2 p-3 glass border border-white/10 rounded-2xl shadow-2xl z-50 w-48 space-y-2"
-                        >
-                          {['#BMS', '#Creative', '#Marketing', '#Success'].map(tag => (
-                            <button 
-                              key={tag}
-                              onClick={() => { setCaption(prev => prev + ' ' + tag); setShowHashtagPicker(false); }}
-                              className="w-full text-left px-3 py-1.5 text-xs font-bold hover:bg-white/5 rounded-lg transition-colors"
-                            >
-                              {tag}
-                            </button>
-                          ))}
+                      {showEmoji && (
+                        <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          className="absolute bottom-full right-0 mb-2 z-50">
+                          <EmojiPicker onEmojiClick={onEmojiClick} theme={theme === 'dark' ? Theme.DARK : Theme.LIGHT}
+                            width={300} height={380} searchPlaceholder="Search emoji…" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Hashtags */}
+                  <div className="relative">
+                    <button onClick={() => { setShowHashtag(v => !v); setShowLocation(false); setShowEmoji(false); }}
+                      className={cn('p-1.5 rounded-lg transition-colors', showHashtag ? 'text-primary bg-primary/10' : 'text-text-muted hover:text-primary hover:bg-white/5')}>
+                      <Hash size={16} />
+                    </button>
+                    <AnimatePresence>
+                      {showHashtag && (
+                        <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          className="absolute bottom-full right-0 mb-2 glass border border-white/10 rounded-2xl shadow-2xl z-50 w-52 overflow-hidden">
+                          <div className="p-2 border-b border-white/10">
+                            <div className="relative">
+                              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                              <input autoFocus value={hashtagSearch} onChange={e => setHashtagSearch(e.target.value)}
+                                placeholder="Search hashtags…" spellCheck
+                                className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text placeholder:text-text-muted outline-none focus:border-primary/50" />
+                            </div>
+                          </div>
+                          <div className="max-h-44 overflow-y-auto p-1">
+                            {assetTags.length > 0 && (
+                              <p className="px-2 py-1 text-[9px] font-black text-primary uppercase tracking-widest">From Asset</p>
+                            )}
+                            {filteredHashtags.map(tag => (
+                              <button key={tag} onClick={() => addHashtag(tag)}
+                                className="w-full text-left px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded-lg transition-colors">
+                                #{tag}
+                              </button>
+                            ))}
+                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -571,76 +509,31 @@ export default function ComposerPage() {
               </div>
             </div>
 
-            {/* Scheduling Toggle */}
-            <div className="space-y-6 pt-6 border-t border-white/5">
+            {/* Schedule */}
+            <div className="space-y-3 pt-4 border-t border-white/5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-12 h-6 rounded-full p-1 transition-colors cursor-pointer",
-                    isScheduled ? "bg-primary" : "bg-white/10"
-                  )} onClick={() => setIsScheduled(!isScheduled)}>
-                    <motion.div 
-                      animate={{ x: isScheduled ? 24 : 0 }}
-                      className="w-4 h-4 rounded-full bg-white shadow-sm"
-                    />
-                  </div>
+                  <button onClick={() => setIsScheduled(v => !v)}
+                    className={cn('w-11 h-6 rounded-full p-1 transition-colors', isScheduled ? 'bg-primary' : 'bg-white/10')}>
+                    <motion.div animate={{ x: isScheduled ? 20 : 0 }} className="w-4 h-4 rounded-full bg-white shadow-sm" />
+                  </button>
                   <span className="text-sm font-bold text-text">Schedule for later</span>
                 </div>
                 {isScheduled && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={suggestBestTime}
-                    className="text-[10px] h-8"
-                  >
-                    <Sparkles size={12} className="mr-1.5 text-primary" /> Suggest Best Time
+                  <Button variant="outline" size="sm" onClick={() => setIsBestTimeOpen(true)} className="text-[10px] h-8">
+                    <Sparkles size={11} className="mr-1 text-primary" /> Best Time
                   </Button>
                 )}
               </div>
-
               <AnimatePresence>
                 {isScheduled && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="p-6 bg-white/5 border border-white/10 rounded-3xl space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted ml-1">Date & Time Picker</label>
-                          <div className="relative">
-                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={18} />
-                            <input 
-                              type="datetime-local"
-                              value={scheduledDateTime}
-                              onChange={(e) => setScheduledDateTime(e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm font-bold text-text outline-none focus:border-primary/50 transition-all"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted ml-1">Timezone</label>
-                          <div className="relative">
-                            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={18} />
-                            <select 
-                              value={timezone}
-                              onChange={(e) => setTimezone(e.target.value)}
-                              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm font-bold text-text outline-none focus:border-primary/50 transition-all appearance-none"
-                            >
-                              <option value="GMT+0 (London)">GMT+0 (London)</option>
-                              <option value="GMT+1 (Africa/Lagos)">GMT+1 (Africa/Lagos)</option>
-                              <option value="GMT-5 (New York)">GMT-5 (New York)</option>
-                              <option value="GMT+8 (Singapore)">GMT+8 (Singapore)</option>
-                            </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={16} />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-xl border border-primary/10">
-                        <Info size={14} className="text-primary" />
-                        <p className="text-[10px] font-medium text-text-muted">Timezone auto-detected based on your location.</p>
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted block mb-2">Date & Time</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={15} />
+                        <input type="datetime-local" value={scheduledDateTime} onChange={e => setScheduledDateTime(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm font-bold text-text outline-none focus:border-primary/50 transition-all" />
                       </div>
                     </div>
                   </motion.div>
@@ -650,116 +543,43 @@ export default function ComposerPage() {
           </div>
         </div>
 
-        {/* Right: Preview Section */}
-        <div className="lg:col-span-5 space-y-8">
-          <div className="glass border border-border rounded-[32px] p-8 space-y-8 sticky top-24">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-lg text-text">Live Preview</h3>
-              <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
-                <button
-                  onClick={() => setPreviewMode('desktop')}
-                  className={cn(
-                    "p-2 rounded-lg transition-all",
-                    previewMode === 'desktop' ? "bg-primary text-white shadow-lg" : "text-text-muted hover:text-text"
-                  )}
-                  title="Desktop View"
-                >
-                  <Monitor size={16} />
-                </button>
-                <button
-                  onClick={() => setPreviewMode('full')}
-                  className={cn(
-                    "p-2 rounded-lg transition-all",
-                    previewMode === 'full' ? "bg-primary text-white shadow-lg" : "text-text-muted hover:text-text"
-                  )}
-                  title="Full View"
-                >
-                  <Maximize2 size={16} />
-                </button>
+        {/* ── Right: Preview ────────────────────────────────────────────── */}
+        <div className="lg:col-span-5">
+          <div className="glass border border-border rounded-[24px] p-5 sm:p-7 space-y-4 sticky top-20">
+            <h3 className="font-bold text-sm text-text">Live Preview</h3>
+            {selectedPlatforms.length === 0 ? (
+              <div className="aspect-[3/4] bg-white/5 border-2 border-dashed border-white/10 rounded-[20px] flex flex-col items-center justify-center text-center p-8">
+                <Layout size={22} className="text-text-muted/20 mb-3" />
+                <p className="text-xs font-bold text-text-muted">Select a platform to see preview</p>
               </div>
-            </div>
-
-            {selectedPlatforms.length > 0 ? (
-              <div className="space-y-8">
-                {/* Platform Tabs */}
+            ) : (
+              <div className="space-y-3">
                 {selectedPlatforms.length > 1 && (
-                  <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 overflow-x-auto no-scrollbar">
-                    {selectedPlatforms.map(platform => (
-                      <button
-                        key={platform}
-                        onClick={() => setActivePreviewPlatform(platform)}
-                        className={cn(
-                          "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-                          activePreviewPlatform === platform ? "bg-primary text-white shadow-lg" : "text-text-muted hover:text-text"
-                        )}
-                      >
-                        {platform}
+                  <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10 overflow-x-auto">
+                    {selectedPlatforms.map(p => (
+                      <button key={p} onClick={() => setActivePreview(p)}
+                        className={cn('shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all',
+                          activePreview === p ? 'bg-primary text-white' : 'text-text-muted hover:text-text')}>
+                        {PLATFORM_MAP[p]?.label || p}
                       </button>
                     ))}
                   </div>
                 )}
-
                 <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activePreviewPlatform + previewMode}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.2 }}
-                    className={cn(
-                      "transition-all duration-500",
-                      previewMode === 'desktop' ? "p-4 bg-black/20 rounded-[40px] border border-white/5 shadow-inner" : ""
-                    )}
-                  >
-                    {previewMode === 'desktop' && (
-                      <div className="flex items-center gap-2 mb-4 px-4 py-2 bg-white/5 rounded-full border border-white/5 w-fit mx-auto">
-                        <div className="flex gap-1">
-                          <div className="w-2 h-2 rounded-full bg-red-500/50" />
-                          <div className="w-2 h-2 rounded-full bg-amber-500/50" />
-                          <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
-                        </div>
-                        <div className="h-3 w-32 bg-white/10 rounded-full" />
-                      </div>
-                    )}
-                    {renderPreview()}
+                  <motion.div key={activePreview + currentCaption.slice(0, 20)}
+                    initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.15 }}>
+                    {renderPreview(activePreview || selectedPlatforms[0])}
                   </motion.div>
                 </AnimatePresence>
-
-                <div className="p-5 bg-primary/5 border border-primary/10 rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-primary">
-                    <span>Platform Optimization</span>
-                    <span>85% Score</span>
-                  </div>
-                  <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: '85%' }}
-                      className="h-full bg-primary"
-                    />
-                  </div>
-                  <p className="text-[10px] text-text-muted leading-relaxed">
-                    Your content is well-optimized for {activePreviewPlatform}. Consider adding 2-3 more hashtags for better reach.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="aspect-[3/4] bg-white/5 border-2 border-dashed border-white/10 rounded-[32px] flex flex-col items-center justify-center text-center p-8">
-                <div className="w-16 h-16 bg-white/5 text-text-muted rounded-full flex items-center justify-center mb-4">
-                  <Layout size={24} className="opacity-20" />
-                </div>
-                <p className="text-sm font-bold text-text-muted">Select a platform to see preview</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <BestTimeModal 
-        isOpen={isBestTimeModalOpen}
-        onClose={() => setIsBestTimeModalOpen(false)}
-        onSelect={handleBestTimeSelect}
-        selectedDate={scheduledDateTime ? new Date(scheduledDateTime) : new Date()}
-      />
+      <BestTimeModal isOpen={isBestTimeOpen} onClose={() => setIsBestTimeOpen(false)}
+        onSelect={time => { const [d] = scheduledDateTime.split('T'); setScheduledDateTime(`${d}T${time}`); toast(`Scheduled for ${time}`, 'success'); }}
+        selectedDate={scheduledDateTime ? new Date(scheduledDateTime) : new Date()} />
     </div>
   );
 }

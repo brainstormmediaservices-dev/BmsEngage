@@ -64,7 +64,7 @@ export interface User {
   notificationPrefs?: NotificationPrefs;
   twoFA?: { enabled: boolean; method: 'app' | 'sms' | null };
   loginHistory?: { ip: string; userAgent: string; device: string; loginAt: string }[];
-  agency?: { name?: string; website?: string; industry?: string; teamSize?: string; description?: string; logo?: string } | null;
+  agency?: { name?: string; website?: string; industry?: string; teamSize?: string; description?: string; logo?: string; enableStartups?: boolean } | null;
   activeContext?: 'personal' | 'agency';
   // Effective role in agency context — 'owner' or an assigned agencyRole from TeamInvite
   agencyRole?: string | null;

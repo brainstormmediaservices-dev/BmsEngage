@@ -207,7 +207,7 @@ export const MediaAssetCard = ({
                       <Edit2 size={14} /> Edit Asset
                     </button>
                   )}
-                  <button onClick={() => { navigate('/composer', { state: { asset } }); setShowMenu(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-primary hover:bg-primary/5 rounded-xl transition-colors font-bold">
+                  <button onClick={() => { navigate('/composer', { state: { asset, date: asset.targetDate ? asset.targetDate.split('T')[0] : undefined } }); setShowMenu(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-primary hover:bg-primary/5 rounded-xl transition-colors font-bold">
                     <Calendar size={14} /> Schedule
                   </button>
                   {isUploader && (

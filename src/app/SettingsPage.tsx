@@ -753,7 +753,7 @@ function SecurityTab({ user, onRefresh, toast }: { user: UserType | null; onRefr
 // ─── Agency Tab ──────────────────────────────────────────────────────────────
 function AgencyTab({ user, onRefresh, toast }: { user: UserType | null; onRefresh: () => Promise<void>; toast: any }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', website: '', industry: '', teamSize: '', description: '' });
+  const [form, setForm] = useState({ name: '', website: '', industry: '', teamSize: '', description: '', enableStartups: false });
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoRef = useRef<HTMLInputElement>(null);
@@ -837,6 +837,7 @@ function AgencyTab({ user, onRefresh, toast }: { user: UserType | null; onRefres
         industry: user.agency.industry || '',
         teamSize: user.agency.teamSize || '',
         description: user.agency.description || '',
+        enableStartups: user.agency.enableStartups ?? false,
       });
     }
     setEditing(false);
@@ -966,8 +967,17 @@ function AgencyTab({ user, onRefresh, toast }: { user: UserType | null; onRefres
             <div className="space-y-1.5">
               <label className="text-[10px] font-black text-text-muted uppercase tracking-widest">Description</label>
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                spellCheck
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3.5 text-sm font-medium text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[100px] resize-none transition-all"
                 placeholder="Describe your agency..." />
+            </div>
+            {/* Startups feature toggle */}
+            <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
+              <div>
+                <p className="font-bold text-text text-sm">Enable Startups</p>
+                <p className="text-xs text-text-muted mt-0.5">Show the Startups section in the sidebar and allow assigning assets to startups.</p>
+              </div>
+              <Toggle checked={form.enableStartups} onChange={v => setForm(f => ({ ...f, enableStartups: v }))} />
             </div>
           </motion.div>
         ) : (

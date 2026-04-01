@@ -66,6 +66,7 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
     tags: '',
     visibility: 'Public' as MediaVisibility,
     startupId: '',
+    targetDate: '',
   });
 
   React.useEffect(() => {
@@ -78,9 +79,10 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
           tags: parentAsset.tags.join(', '),
           visibility: parentAsset.visibility,
           startupId: '',
+          targetDate: parentAsset.targetDate ? parentAsset.targetDate.split('T')[0] : '',
         });
       } else {
-        setFormData({ title: '', category: 'Image', description: '', tags: '', visibility: 'Public', startupId: '' });
+        setFormData({ title: '', category: 'Image', description: '', tags: '', visibility: 'Public', startupId: '', targetDate: '' });
       }
       setFiles([]);
       setUploadProgress(0);
@@ -134,6 +136,14 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (files.length === 0) { toast('Please select a file to upload', 'error'); return; }
+    // Startup is required for agency uploads when feature is enabled
+    if (isAgency && !parentAsset && startups.length > 0 && user?.agency?.enableStartups && !formData.startupId) {
+      toast('Please select a startup / organisation for this asset', 'error'); return;
+    }
+    // Target date is required
+    if (!parentAsset && !formData.targetDate) {
+      toast('Target date is required — set the week this asset is intended for', 'error'); return;
+    }
     setIsUploading(true);
     setUploadProgress(0);
     try {
@@ -311,27 +321,44 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
               <option value="Private">Private</option>
             </select>
           </div>
-          {/* Startup — agency context only, when startups exist */}
-          {isAgency && !parentAsset && startups.length > 0 && (
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Startup / Organisation</label>
+          {/* Startup — agency context only, required when startups exist and feature is enabled */}
+          {isAgency && !parentAsset && startups.length > 0 && user?.agency?.enableStartups && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                Startup / Organisation <span className="text-red-400">*</span>
+              </label>
               <select
                 value={formData.startupId}
                 onChange={(e) => setFormData({ ...formData, startupId: e.target.value })}
+                required
                 className="w-full h-12 bg-background border border-border rounded-xl px-4 text-sm text-text outline-none focus:border-primary/50 transition-all"
               >
-                <option value="">None</option>
+                <option value="">— Select a startup —</option>
                 {startups.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </div>
           )}
+          {/* Target Date — which week/date this asset is for */}
+          {!parentAsset && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Target Date <span className="text-red-400">*</span> (week this asset is for)</label>
+              <input
+                type="date"
+                value={formData.targetDate}
+                onChange={(e) => setFormData({ ...formData, targetDate: e.target.value })}
+                required
+                className="w-full h-12 bg-background border border-border rounded-xl px-4 text-sm text-text outline-none focus:border-primary/50 transition-all"
+              />
+              <p className="text-[10px] text-text-muted">Set the week this asset is intended for — helps filter by this week or next week.</p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-1.5">
           <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Description</label>
-          <textarea placeholder="Describe this asset..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[100px] resize-none transition-all" />
+          <textarea placeholder="Describe this asset..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} spellCheck className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[100px] resize-none transition-all" />
         </div>
 
         {isUploading && (

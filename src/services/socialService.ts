@@ -16,11 +16,26 @@ export interface ConnectedAccount {
 
 const BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
 
+export interface PlatformInsights {
+  platform: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+  followers: number | null;
+  following: number | null;
+  posts: number | null;
+  reach: number | null;
+  engagement: number | null;
+  impressions: number | null;
+  topPosts: { id: string; content: string; likes: number; comments: number; shares: number; url: string; createdAt: string }[];
+  recentActivity: { type: string; text: string; time: string }[];
+  profileUrl: string | null;
+  error: string | null;
+}
+
 export const socialService = {
-  /** Redirect browser to OAuth initiation endpoint (full page redirect) */
   connectPlatform: (platform: 'meta' | 'twitter' | 'linkedin' | 'tiktok') => {
     const token = localStorage.getItem('token');
-    // Pass JWT as query param so the backend auth middleware can read it on the redirect
     window.location.href = `${BASE_URL}/api/social/auth/${platform}?token=${token}`;
   },
 
@@ -36,5 +51,10 @@ export const socialService = {
   refreshToken: async (id: string): Promise<{ tokenExpiry: string }> => {
     const res = await api.post(`/social/accounts/${id}/refresh-token`);
     return res.data;
+  },
+
+  getInsights: async (id: string): Promise<PlatformInsights> => {
+    const res = await api.get(`/social/accounts/${id}/insights`);
+    return res.data.insights;
   },
 };

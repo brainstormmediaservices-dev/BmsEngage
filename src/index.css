@@ -62,3 +62,33 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-border rounded-full hover:bg-text-muted transition-colors;
 }
+
+/* ── Global select / option theming ─────────────────────────────────────── */
+select {
+  background-color: var(--card);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+select option {
+  background-color: var(--card);
+  color: var(--text);
+}
+
+/* Light mode overrides */
+.light select {
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+.light select option {
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+/* ── Spell-check highlight (browser native) ─────────────────────────────── */
+input[spellcheck="true"],
+textarea[spellcheck="true"] {
+  -webkit-spell-checking: enabled;
+  spell-checking: enabled;
+}

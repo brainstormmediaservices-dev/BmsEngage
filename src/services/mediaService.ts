@@ -24,9 +24,9 @@ export const mediaService = {
     category: string;
     description: string;
     tags: string;
-    status: string;
     visibility: string;
     startupId?: string;
+    targetDate?: string;
   }, onProgress?: (pct: number) => void): Promise<MediaAsset> => {
     const data = new FormData();
     data.append('file', file);
@@ -34,9 +34,9 @@ export const mediaService = {
     data.append('category', formData.category);
     data.append('description', formData.description);
     data.append('tags', formData.tags);
-    data.append('status', formData.status);
     data.append('visibility', formData.visibility);
     if (formData.startupId) data.append('startupId', formData.startupId);
+    if (formData.targetDate) data.append('targetDate', formData.targetDate);
 
     const res = await api.post('/media/upload', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -75,7 +75,7 @@ export const mediaService = {
     return res.data.media;
   },
 
-  updateMedia: async (id: string, updates: Partial<MediaAsset & { tags: string }>): Promise<MediaAsset> => {
+  updateMedia: async (id: string, updates: Partial<MediaAsset & { tags: string; startupId: string | null; targetDate: string | null }>): Promise<MediaAsset> => {
     const res = await api.patch(`/media/${id}`, updates);
     return res.data.media;
   },
