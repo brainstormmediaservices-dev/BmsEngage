@@ -29,7 +29,10 @@ export const MediaAssetCard = ({
   const [showMenu, setShowMenu] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const btnRef = React.useRef<HTMLButtonElement>(null);
+  const cardRef = React.useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 });
+  const longPressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = React.useRef(false);
   const navigate = useNavigate();
   const { canUploadAsset, canDeleteAsset } = usePermissions();
   const { user } = useAuth();
@@ -83,14 +86,57 @@ export const MediaAssetCard = ({
     };
   }, [showMenu]);
 
-  const openMenu = () => {
-    if (!btnRef.current) return;
-    const rect = btnRef.current.getBoundingClientRect();
+  const openMenu = (anchorEl?: HTMLElement) => {
+    const el = anchorEl || btnRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     setMenuPos({
       top: rect.bottom + window.scrollY + 4,
       right: window.innerWidth - rect.right,
     });
     setShowMenu(v => !v);
+  };
+
+  // Long-press handlers for mobile — hold 500ms to open context menu
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    didLongPress.current = false;
+    const touch = e.touches[0];
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      // Position menu near the touch point
+      setMenuPos({
+        top: touch.clientY + window.scrollY + 8,
+        right: Math.max(8, window.innerWidth - touch.clientX - 104),
+      });
+      setShowMenu(true);
+      // Haptic feedback if available
+      if (navigator.vibrate) navigator.vibrate(40);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchMove = () => {
+    // Cancel long press if finger moves
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Card click — always open view modal (on any device)
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't trigger if clicking the menu button, inside the menu, or action buttons in overlay
+    if (btnRef.current?.contains(e.target as Node)) return;
+    if (menuRef.current?.contains(e.target as Node)) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    if (didLongPress.current) { didLongPress.current = false; return; }
+    onView(asset);
   };
 
   const getCategoryIcon = () => {
@@ -120,7 +166,12 @@ export const MediaAssetCard = ({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       whileHover={{ y: -4 }}
-      className="group relative bg-card border border-border rounded-2xl transition-all hover:border-primary/50 hover:shadow-[0_20px_40px_-15px_rgba(65,1,121,0.3)] overflow-visible"
+      ref={cardRef}
+      onClick={handleCardClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchMove}
+      className="group relative bg-card border border-border rounded-2xl transition-all hover:border-primary/50 hover:shadow-[0_20px_40px_-15px_rgba(65,1,121,0.3)] overflow-visible cursor-pointer select-none"
     >
       {/* Thumbnail */}
       <div className="aspect-[4/3] rounded-t-2xl overflow-hidden relative">
@@ -132,13 +183,17 @@ export const MediaAssetCard = ({
             referrerPolicy="no-referrer" />
         )}
 
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
-          <button onClick={() => onView(asset)} className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all hover:scale-110" title="View">
+        {/* Overlay — desktop hover shows quick actions; click on card opens view */}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm pointer-events-none">
+          <div className="p-2.5 bg-white/20 rounded-xl text-white">
             <Eye size={20} />
-          </button>
+          </div>
           {canUploadAsset && isUploader && (
-            <button onClick={() => onAddVariant(asset)} className="p-2.5 bg-primary hover:bg-primary-light rounded-xl text-white transition-all hover:scale-110 shadow-lg shadow-primary/40" title="Add Variant">
+            <button
+              onClick={e => { e.stopPropagation(); onAddVariant(asset); }}
+              className="p-2.5 bg-primary hover:bg-primary-light rounded-xl text-white transition-all hover:scale-110 shadow-lg shadow-primary/40 pointer-events-auto"
+              title="Add Variant"
+            >
               <Plus size={20} />
             </button>
           )}
@@ -183,11 +238,10 @@ export const MediaAssetCard = ({
         <div className="flex items-start justify-between gap-2 mb-1">
           <h4 className="text-sm font-bold text-text truncate group-hover:text-primary transition-colors flex-1">{asset.title}</h4>
           <div className="shrink-0">
-            <button ref={btnRef} onClick={openMenu}
+            <button ref={btnRef} onClick={() => openMenu()}
               className="p-1.5 text-text-muted hover:text-text hover:bg-white/5 rounded-lg transition-all">
               <MoreVertical size={16} />
             </button>
-
             {/* Portal dropdown — renders at document.body level, always on top */}
             {showMenu && createPortal(
               <AnimatePresence>
