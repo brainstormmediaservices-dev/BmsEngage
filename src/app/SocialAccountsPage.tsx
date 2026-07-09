@@ -19,16 +19,17 @@ import api from '../services/api';
 
 // ── Platform config ───────────────────────────────────────────────────────────
 const PCFG: Record<string, { label: string; color: string; bg: string; charLimit: number; profileBase: string }> = {
-  meta:     { label: 'Facebook',  color: 'text-blue-500',  bg: 'bg-blue-500/10',  charLimit: 63206, profileBase: 'https://facebook.com/' },
-  twitter:  { label: 'Twitter/X', color: 'text-sky-400',   bg: 'bg-sky-400/10',   charLimit: 280,   profileBase: 'https://twitter.com/' },
-  linkedin: { label: 'LinkedIn',  color: 'text-blue-700',  bg: 'bg-blue-700/10',  charLimit: 3000,  profileBase: 'https://linkedin.com/in/' },
-  tiktok:   { label: 'TikTok',    color: 'text-pink-500',  bg: 'bg-pink-500/10',  charLimit: 2200,  profileBase: 'https://tiktok.com/@' },
+  meta:      { label: 'Facebook',   color: 'text-blue-500',  bg: 'bg-blue-500/10',  charLimit: 63206, profileBase: 'https://facebook.com/' },
+  twitter:   { label: 'Twitter/X',  color: 'text-sky-400',   bg: 'bg-sky-400/10',   charLimit: 280,   profileBase: 'https://twitter.com/' },
+  linkedin:  { label: 'LinkedIn',   color: 'text-blue-700',  bg: 'bg-blue-700/10',  charLimit: 3000,  profileBase: 'https://linkedin.com/in/' },
+  tiktok:    { label: 'TikTok',     color: 'text-pink-500',  bg: 'bg-pink-500/10',  charLimit: 2200,  profileBase: 'https://tiktok.com/@' },
+  instagram: { label: 'Instagram',  color: 'text-pink-500',  bg: 'bg-purple-500/10', charLimit: 2200, profileBase: 'https://instagram.com/' },
 };
 
 // Platform icon as SVG letter badge (avoids deprecated lucide icons)
 function PlatformBadge({ platform, size = 20, className = '' }: { platform: string; size?: number; className?: string }) {
   const cfg = PCFG[platform];
-  const letter = platform === 'meta' ? 'f' : platform === 'twitter' ? 'X' : platform === 'linkedin' ? 'in' : platform === 'tiktok' ? 'tt' : platform[0];
+  const letter = platform === 'meta' ? 'f' : platform === 'twitter' ? 'X' : platform === 'linkedin' ? 'in' : platform === 'tiktok' ? 'tt' : platform === 'instagram' ? 'ig' : platform[0];
   return (
     <div className={cn('rounded-xl flex items-center justify-center font-black text-xs shrink-0', cfg?.bg, cfg?.color, className)}
       style={{ width: size, height: size, fontSize: size * 0.4 }}>

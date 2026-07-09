@@ -176,7 +176,7 @@ export const ShareAssetModal = ({ isOpen, onClose, asset, onAssetUpdate }: Share
         {/* Asset preview */}
         <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10">
           <div className="w-14 h-14 rounded-xl overflow-hidden border border-white/10 flex-shrink-0 bg-black/20">
-            {asset.category === 'Video'
+            {asset.metadata?.mimeType?.startsWith('video/')
               ? <video src={asset.url} className="w-full h-full object-cover" muted />
               : <img src={asset.url} alt={asset.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
           </div>

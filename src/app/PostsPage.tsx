@@ -25,7 +25,8 @@ import {
   Zap,
   ArrowUpRight,
   Loader2,
-  Check
+  Check,
+  History,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { MOCK_POSTS, MOCK_ACCOUNTS } from '../lib/mock-data';
@@ -33,6 +34,8 @@ import { SocialPost, SocialPlatform } from '../types/social';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { PostStatusTracker } from '../components/posts/PostStatusTracker';
+import { postService, ScheduledPost } from '../services/postService';
 
 const platformIcons: Record<string, any> = {
   Instagram,
@@ -55,8 +58,18 @@ import { AccessGuard } from '../components/AccessGuard';
 function PostsPageInner() {
   const [activeTab, setActiveTab] = useState<string>(MOCK_ACCOUNTS[0]?.platform || '');
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
+  const [recentPosts, setRecentPosts] = useState<ScheduledPost[]>([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
 
   const connectedPlatforms = MOCK_ACCOUNTS.filter(a => a.status === 'connected');
+
+  useEffect(() => {
+    setLoadingPosts(true);
+    postService.getAll().then(posts => {
+      setRecentPosts(posts.slice(0, 10));
+    }).catch(() => {}).finally(() => setLoadingPosts(false));
+  }, []);
 
   useEffect(() => {
     if (activeTab) {
@@ -133,6 +146,56 @@ function PostsPageInner() {
             </button>
           );
         })}
+      </div>
+
+      {/* Publishing History */}
+      <div className="glass border border-white/10 rounded-[24px] overflow-hidden">
+        <button onClick={() => setShowHistory(v => !v)}
+          className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/[0.03] transition-colors">
+          <div className="flex items-center gap-2">
+            <History size={16} className="text-primary" />
+            <span className="text-sm font-bold text-text">Publishing History</span>
+            <span className="text-[10px] text-text-muted font-bold bg-white/5 px-2 py-0.5 rounded-full">{recentPosts.length}</span>
+          </div>
+          <ChevronDown size={14} className={cn('text-text-muted transition-transform', showHistory && 'rotate-180')} />
+        </button>
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="border-t border-white/5 divide-y divide-white/5 max-h-[400px] overflow-y-auto">
+                {loadingPosts ? (
+                  <div className="p-8 text-center"><Loader2 size={20} className="animate-spin text-primary mx-auto" /></div>
+                ) : recentPosts.length === 0 ? (
+                  <div className="p-8 text-center text-text-muted text-xs font-bold">No posts yet. Create your first post!</div>
+                ) : recentPosts.map(p => (
+                  <div key={p.id} className="p-4 flex items-start gap-4 hover:bg-white/[0.02] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-text line-clamp-1 font-medium">{p.content || <span className="text-text-muted italic">No caption</span>}</p>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className={cn(
+                          'text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded',
+                          p.status === 'published' ? 'text-emerald-500 bg-emerald-500/10' :
+                          p.status === 'failed' ? 'text-red-500 bg-red-500/10' :
+                          p.status === 'scheduled' ? 'text-amber-500 bg-amber-500/10' :
+                          'text-text-muted bg-white/5'
+                        )}>{p.status}</span>
+                        {p.scheduledTime && <span className="text-[9px] text-text-muted">{new Date(p.scheduledTime).toLocaleDateString()}</span>}
+                      </div>
+                    </div>
+                    <PostStatusTracker
+                      postId={p.id}
+                      platforms={p.platforms}
+                      status={p.status}
+                      platformResults={p.platformResults}
+                      error={p.error}
+                      compact
+                    />
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

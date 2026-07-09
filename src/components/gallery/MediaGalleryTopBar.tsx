@@ -3,6 +3,7 @@ import { Search, Plus, ChevronDown, LayoutGrid, ArrowUpDown, X, Building2, Calen
 import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
 import { MediaCategory } from '../../types/media';
+import { MAIN_CATEGORIES, type MainCategory } from '../../constants/mediaCategories';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Startup } from '../../services/startupService';
@@ -49,7 +50,7 @@ export const MediaGalleryTopBar = ({
   activeCategory, activeFileType, activeSort, activeWeekRange, activeDateFrom, activeDateTo,
   activeStartup, searchQuery, canUpload = true, startups = [], isAgencyContext = false,
 }: MediaGalleryTopBarProps) => {
-  const categories: (MediaCategory | 'All')[] = ['All', 'Flyer', 'Image', 'Video', 'Graphics'];
+  const categories: (MediaCategory | 'All')[] = ['All', ...MAIN_CATEGORIES];
   const fileTypes = ['All', 'JPG', 'PNG', 'SVG', 'MP4', 'MOV', 'PDF', 'WEBP', 'PSD', 'AI'];
   const sorts = ['Newest', 'Oldest', 'A–Z'];
 

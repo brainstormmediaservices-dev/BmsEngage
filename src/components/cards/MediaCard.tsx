@@ -82,7 +82,7 @@ export const MediaCard = ({ asset, onView, onEdit, onDelete, onShare, onAddVaria
       className="group relative bg-card border border-border rounded-2xl overflow-hidden hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(124,58,237,0.2)] transition-all cursor-pointer select-none"
     >
       <div className="aspect-square overflow-hidden">
-        {asset.metadata?.mimeType?.startsWith('video/') || asset.category === 'Video' ? (
+        {asset.metadata?.mimeType?.startsWith('video/') ? (
           <video src={displayUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" muted />
         ) : (
           <img src={displayUrl} alt={asset.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" referrerPolicy="no-referrer" />

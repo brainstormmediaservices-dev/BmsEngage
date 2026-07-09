@@ -18,10 +18,11 @@ import { useTheme } from '../lib/ThemeContext';
 import api from '../services/api';
 
 const PLATFORM_MAP: Record<string, { label: string; dot: string; charLimit: number }> = {
-  meta:     { label: 'Facebook',  dot: 'bg-blue-500',  charLimit: 63206 },
-  twitter:  { label: 'Twitter/X', dot: 'bg-sky-400',   charLimit: 280 },
-  linkedin: { label: 'LinkedIn',  dot: 'bg-blue-700',  charLimit: 3000 },
-  tiktok:   { label: 'TikTok',    dot: 'bg-pink-500',  charLimit: 2200 },
+  meta:      { label: 'Facebook',   dot: 'bg-blue-500',  charLimit: 63206 },
+  twitter:   { label: 'Twitter/X',  dot: 'bg-sky-400',   charLimit: 280 },
+  linkedin:  { label: 'LinkedIn',   dot: 'bg-blue-700',  charLimit: 3000 },
+  tiktok:    { label: 'TikTok',     dot: 'bg-pink-500',  charLimit: 2200 },
+  instagram: { label: 'Instagram',  dot: 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400', charLimit: 2200 },
 };
 
 interface PlatformCaption { caption: string; location: string; hashtags: string[] }
@@ -294,6 +295,25 @@ export default function ComposerPage() {
         </div>
         <div className="px-3 pb-2 text-xs text-text">{cap || <span className="text-text-muted italic">Post will appear here…</span>}</div>
         {mediaUrl && <div className="border-y border-white/5"><img src={mediaUrl} alt="" className="w-full object-cover" referrerPolicy="no-referrer" /></div>}
+      </div>
+    );
+    if (p === 'instagram') return (
+      <div className="bg-card rounded-2xl border border-white/10 max-w-[300px] mx-auto overflow-hidden">
+        <div className="p-3 flex items-center gap-2 border-b border-white/5">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center text-white text-[9px] font-bold">{name[0]}</div>
+          <div><p className="text-[11px] font-bold text-text">{name}</p><p className="text-[8px] text-text-muted">Just now</p></div>
+        </div>
+        {mediaUrl && (
+          <div className="aspect-square"><img src={mediaUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>
+        )}
+        <div className="p-3 space-y-1.5">
+          <div className="flex items-center gap-3 text-sm">
+            <span>❤️</span><span>💬</span><span>➤</span>
+          </div>
+          <p className="text-[11px] text-text">
+            <span className="font-bold">{name}</span> {cap || <span className="text-text-muted italic">Caption…</span>}
+          </p>
+        </div>
       </div>
     );
     if (p === 'tiktok') return (

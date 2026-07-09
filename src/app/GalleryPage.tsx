@@ -109,23 +109,21 @@ export default function GalleryPage() {
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
     return media.filter(a => {
-      const isOwn = a.ownerId === user.id || a.uploadedBy === user.name;
+      const isOwn = a.ownerId === user.id;
       if (!isOwn) return false;
-      if (!a.targetDate) return false;
-      const td = new Date(a.targetDate);
-      return td >= weekStart && td <= weekEnd;
+      const date = a.targetDate ? new Date(a.targetDate) : new Date(a.metadata.createdDate);
+      return date >= weekStart && date <= weekEnd;
     });
   }, [media, user]);
 
-  // Assets whose targetDate falls in the current week (Mon–Sun)
+  // Assets whose targetDate or createdDate falls in the current week (Mon–Sun)
   const thisWeekAssets = useMemo(() => {
     const now = new Date();
     const weekStart = startOfWeek(now, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
     return media.filter(a => {
-      if (!a.targetDate) return false;
-      const td = new Date(a.targetDate);
-      return td >= weekStart && td <= weekEnd;
+      const date = a.targetDate ? new Date(a.targetDate) : new Date(a.metadata.createdDate);
+      return date >= weekStart && date <= weekEnd;
     });
   }, [media]);
 
@@ -249,7 +247,7 @@ export default function GalleryPage() {
               </button>
             )}
             {/* Creative presentation mode — own uploads this week only */}
-            {canCreativePresent && !canPresent && (
+            {canCreativePresent && (
               <button
                 onClick={() => { setPresentationIndex(0); setPresentationOpen(true); }}
                 disabled={myThisWeekAssets.length === 0}
@@ -262,7 +260,7 @@ export default function GalleryPage() {
             {canPresent && thisWeekAssets.length > 0 && (
               <span className="text-xs text-text-muted">{thisWeekAssets.length} asset{thisWeekAssets.length !== 1 ? 's' : ''} this week</span>
             )}
-            {canCreativePresent && !canPresent && myThisWeekAssets.length > 0 && (
+            {canCreativePresent && myThisWeekAssets.length > 0 && (
               <span className="text-xs text-text-muted">{myThisWeekAssets.length} of your asset{myThisWeekAssets.length !== 1 ? 's' : ''} this week</span>
             )}
           </div>

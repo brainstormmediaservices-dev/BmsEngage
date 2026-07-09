@@ -2,8 +2,9 @@ import * as React from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Upload, X, FileText, Image as ImageIcon, Film, Layers, Loader2 } from 'lucide-react';
+import { Upload, X, FileText, Image as ImageIcon, Film, Layers, Loader2, ChevronDown } from 'lucide-react';
 import { MediaCategory, MediaVisibility, MediaAsset } from '../../types/media';
+import { CATEGORIES, MAIN_CATEGORIES, detectMainCategory, detectSubcategory, type MainCategory } from '../../constants/mediaCategories';
 import { cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
 import { mediaService } from '../../services/mediaService';
@@ -20,22 +21,17 @@ interface UploadMediaModalProps {
   correctionReplyTo?: string;
   startups?: Startup[];
   campaignEventId?: string;
-  targetDate?: string; // pre-filled, read-only when passed
+  targetDate?: string;
 }
 
-const VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
-const IMAGE_MAX_BYTES = 100 * 1024 * 1024;       // 100 MB
+const VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const IMAGE_MAX_BYTES = 100 * 1024 * 1024;
 
-// Extensions we accept — used for validation since MIME types are unreliable for design files
 const ALLOWED_EXTENSIONS = new Set([
-  // Images
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff', 'tif', 'avif', 'heic', 'heif', 'ico',
-  // Design / graphics
   'psd', 'psb', 'ai', 'eps', 'indd', 'indt', 'xd', 'sketch', 'fig', 'afdesign', 'afphoto',
   'cdr', 'xcf', 'raw', 'cr2', 'nef', 'arw', 'dng',
-  // Documents
   'pdf',
-  // Video
   'mp4', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'mpg', '3gp', 'flv', 'wmv', 'ogv', 'm4v', 'ts',
 ]);
 
@@ -43,11 +39,8 @@ const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'avi', 'mkv', 'webm', 'mpeg', 'm
 
 const getExt = (filename: string) => filename.split('.').pop()?.toLowerCase() ?? '';
 
-// accept string for <input> — covers all types; extension validation is done in addFiles
 const ACCEPTED_INPUT = [
-  'image/*',
-  'video/*',
-  'application/pdf',
+  'image/*', 'video/*', 'application/pdf',
   '.psd', '.psb', '.ai', '.eps', '.indd', '.xd', '.sketch', '.fig',
   '.afdesign', '.afphoto', '.cdr', '.xcf',
   '.raw', '.cr2', '.nef', '.arw', '.dng',
@@ -62,7 +55,6 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
   const { toast } = useToast();
   const { user } = useAuth();
   const isAgency = user?.activeContext === 'agency';
-  // enableStartups: true for owner (user.agency.enableStartups) OR for team members (agencyEnableStartups from profile)
   const startupsEnabled = isAgency && (user?.agency?.enableStartups || user?.agencyEnableStartups);
   const [campaignEvents, setCampaignEvents] = React.useState<any[]>([]);
 
@@ -74,7 +66,8 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
 
   const [formData, setFormData] = React.useState({
     title: '',
-    category: 'Image' as MediaCategory,
+    category: 'Graphics Design' as MainCategory,
+    subcategory: '',
     description: '',
     tags: '',
     visibility: 'Public' as MediaVisibility,
@@ -83,12 +76,15 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
     campaignEventId: '',
   });
 
+  const subcategoryOptions = CATEGORIES[formData.category] || [];
+
   React.useEffect(() => {
     if (isOpen) {
       if (parentAsset) {
         setFormData({
           title: parentAsset.title,
-          category: parentAsset.category,
+          category: (parentAsset.category as MainCategory) || 'Graphics Design',
+          subcategory: (parentAsset as any).subcategory || '',
           description: parentAsset.description,
           tags: parentAsset.tags.join(', '),
           visibility: parentAsset.visibility,
@@ -97,7 +93,7 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
           campaignEventId: (parentAsset as any).campaignEventId || '',
         });
       } else {
-        setFormData({ title: '', category: 'Image', description: '', tags: '', visibility: 'Public', startupId: '', targetDate: propTargetDate || '', campaignEventId: campaignEventId || '' });
+        setFormData({ title: '', category: 'Graphics Design', subcategory: '', description: '', tags: '', visibility: 'Public', startupId: '', targetDate: propTargetDate || '', campaignEventId: campaignEventId || '' });
       }
       setFiles([]);
       setUploadProgress(0);
@@ -107,14 +103,11 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
 
   const validateFile = (file: File): string | null => {
     const ext = getExt(file.name);
-    if (!ALLOWED_EXTENSIONS.has(ext)) {
-      return `"${file.name}" — unsupported format (.${ext || 'unknown'}).`;
-    }
+    if (!ALLOWED_EXTENSIONS.has(ext)) return `"${file.name}" — unsupported format (.${ext || 'unknown'}).`;
     const isVideo = VIDEO_EXTENSIONS.has(ext);
     const maxBytes = isVideo ? VIDEO_MAX_BYTES : IMAGE_MAX_BYTES;
     if (file.size > maxBytes) {
-      const maxLabel = isVideo ? '2 GB' : '100 MB';
-      return `"${file.name}" exceeds the ${maxLabel} limit.`;
+      return `"${file.name}" exceeds the ${isVideo ? '2 GB' : '100 MB'} limit.`;
     }
     return null;
   };
@@ -137,18 +130,22 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
       setFiles((prev) => {
         const existing = new Set(prev.map((f) => f.name + f.size));
         const newFiles = valid.filter((f) => !existing.has(f.name + f.size));
-        // Auto-generate title from first new file if title is still empty
-        if (newFiles.length > 0 && !formData.title) {
-          const baseName = newFiles[0].name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-          // Priority: campaign event name > startup name > file name
-          const campaignEvent = campaignEvents.find((ev: any) => ev.id === (formData.campaignEventId || campaignEventId));
-          const startup = startups.find(s => s.id === formData.startupId);
-          const autoTitle = campaignEvent
-            ? `${campaignEvent.title} — ${baseName}`
-            : startup
-            ? `${startup.name} — ${baseName}`
-            : baseName;
-          setFormData((fd: any) => ({ ...fd, title: autoTitle }));
+        if (newFiles.length > 0) {
+          setFormData((fd: any) => {
+            const updates: any = {};
+            if (!fd.title) {
+              const baseName = newFiles[0].name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+              const campaignEvent = campaignEvents.find((ev: any) => ev.id === (fd.campaignEventId || campaignEventId));
+              const startup = startups.find(s => s.id === fd.startupId);
+              updates.title = campaignEvent
+                ? `${campaignEvent.title} — ${baseName}`
+                : startup ? `${startup.name} — ${baseName}` : baseName;
+            }
+            const detected = detectMainCategory(newFiles[0].name);
+            updates.category = detected;
+            updates.subcategory = detectSubcategory(newFiles[0].name);
+            return { ...fd, ...updates };
+          });
         }
         return [...prev, ...newFiles];
       });
@@ -167,11 +164,9 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
     if (files.length === 0) { toast('Please select a file to upload', 'error'); return; }
     if (!formData.title.trim()) { toast('Title is required', 'error'); return; }
     if (!formData.tags.trim()) { toast('At least one tag is required', 'error'); return; }
-    // Startup is required for agency uploads when feature is enabled
     if (isAgency && !parentAsset && startups.length > 0 && startupsEnabled && !formData.startupId) {
       toast('Please select a startup / organisation for this asset', 'error'); return;
     }
-    // Target date is required
     if (!parentAsset && !formData.targetDate) {
       toast('Target date is required — set the week this asset is intended for', 'error'); return;
     }
@@ -183,12 +178,16 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
         onUpload(updated);
         toast('Variant uploaded successfully!', 'success');
       } else if (files.length === 1) {
-        const asset = await mediaService.uploadSingle(files[0], { ...formData, campaignEventId: campaignEventId || formData.campaignEventId || undefined }, setUploadProgress);
+        const asset = await mediaService.uploadSingle(files[0], {
+          ...formData,
+          campaignEventId: campaignEventId || formData.campaignEventId || undefined,
+        } as any, setUploadProgress);
         onUpload(asset);
         toast('Media uploaded successfully!', 'success');
       } else {
         const assets = await mediaService.uploadMultiple(files, {
           category: formData.category,
+          subcategory: formData.subcategory,
           visibility: formData.visibility,
         });
         assets.forEach((a) => onUpload(a));
@@ -203,11 +202,8 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
     }
   };
 
-  // Generate object URLs for previews and revoke on cleanup
   const previews = React.useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
-  React.useEffect(() => {
-    return () => previews.forEach((url) => URL.revokeObjectURL(url));
-  }, [previews]);
+  React.useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
 
   const getFileType = (file: File) => {
     if (file.type.startsWith('image/')) return 'image';
@@ -236,7 +232,6 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
           </div>
         )}
 
-        {/* Dropzone — hide when files are selected */}
         {files.length === 0 && (
           <div
             onDragOver={handleDragOver}
@@ -258,10 +253,8 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
           </div>
         )}
 
-        {/* Preview Grid */}
         {files.length > 0 && (
           <div className="space-y-4">
-            {/* Grid of previews */}
             <div className={cn(
               'grid gap-3',
               files.length === 1 ? 'grid-cols-1' : files.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
@@ -271,10 +264,7 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
                 const previewUrl = previews[idx];
                 return (
                   <div key={idx} className="relative group rounded-2xl overflow-hidden border border-border bg-card aspect-video">
-                    {/* Preview content */}
-                    {type === 'image' && (
-                      <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />
-                    )}
+                    {type === 'image' && <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />}
                     {type === 'video' && (
                       <video src={previewUrl} className="w-full h-full object-cover" muted playsInline
                         onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play()}
@@ -287,14 +277,8 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
                         <span className="text-xs font-bold text-text-muted uppercase">{file.type.split('/')[1] || 'file'}</span>
                       </div>
                     )}
-
-                    {/* Overlay with file info + remove */}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3">
-                      <button
-                        type="button"
-                        onClick={() => removeFile(idx)}
-                        className="self-end p-1.5 bg-red-500/80 hover:bg-red-500 rounded-lg text-white transition-all"
-                      >
+                      <button type="button" onClick={() => removeFile(idx)} className="self-end p-1.5 bg-red-500/80 hover:bg-red-500 rounded-lg text-white transition-all">
                         <X size={14} />
                       </button>
                       <div>
@@ -302,8 +286,6 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
                         <p className="text-white/60 text-[10px]">{(file.size / (1024 * 1024)).toFixed(2)} MB • {file.type.split('/')[1]?.toUpperCase()}</p>
                       </div>
                     </div>
-
-                    {/* Type badge */}
                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/50 backdrop-blur-sm text-[10px] font-bold uppercase text-white">
                       {type === 'image' ? <ImageIcon size={10} className="inline mr-1" /> : type === 'video' ? <Film size={10} className="inline mr-1" /> : <FileText size={10} className="inline mr-1" />}
                       {file.type.split('/')[1]?.toUpperCase()}
@@ -313,7 +295,6 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
               })}
             </div>
 
-            {/* Add more / clear row */}
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-muted font-medium">{files.length} file{files.length > 1 ? 's' : ''} selected</p>
               <div className="flex items-center gap-2">
@@ -331,28 +312,61 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
           </div>
         )}
 
-        {/* Form Fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <Input label="Title *" placeholder="Auto-generated from file name (editable)" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} spellCheck />
+
+          {/* Main Category */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Category</label>
-            <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value as MediaCategory })} className="w-full h-12 bg-background border border-border rounded-xl px-4 text-sm text-text outline-none focus:border-primary/50 transition-all">
-              <option value="Image">Image</option>
-              <option value="Video">Video</option>
-              <option value="Flyer">Flyer</option>
-              <option value="Graphics">Graphics</option>
-            </select>
+            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Category *</label>
+            <div className="relative">
+              <select
+                value={formData.category}
+                onChange={(e) => {
+                  const newCat = e.target.value as MainCategory;
+                  setFormData({ ...formData, category: newCat, subcategory: '' });
+                }}
+                className="w-full h-12 bg-background border border-border rounded-xl px-4 pr-10 text-sm text-text outline-none focus:border-primary/50 appearance-none transition-all"
+              >
+                {MAIN_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
+            </div>
           </div>
+
+          {/* Subcategory */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Type *</label>
+            <div className="relative">
+              <select
+                value={formData.subcategory}
+                onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                className="w-full h-12 bg-background border border-border rounded-xl px-4 pr-10 text-sm text-text outline-none focus:border-primary/50 appearance-none transition-all"
+              >
+                <option value="">Select type...</option>
+                {subcategoryOptions.map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
+            </div>
+          </div>
+
           <Input label="Tags * (comma separated)" placeholder="summer, campaign, 2024" value={formData.tags} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} />
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Visibility</label>
-            <select value={formData.visibility} onChange={(e) => setFormData({ ...formData, visibility: e.target.value as MediaVisibility })} className="w-full h-12 bg-background border border-border rounded-xl px-4 text-sm text-text outline-none focus:border-primary/50 transition-all">
-              <option value="Public">Public</option>
-              <option value="Team">Team</option>
-              <option value="Private">Private</option>
-            </select>
+            <div className="relative">
+              <select value={formData.visibility} onChange={(e) => setFormData({ ...formData, visibility: e.target.value as MediaVisibility })} className="w-full h-12 bg-background border border-border rounded-xl px-4 pr-10 text-sm text-text outline-none focus:border-primary/50 appearance-none transition-all">
+                <option value="Public">Public</option>
+                <option value="Team">Team</option>
+                <option value="Private">Private</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
+            </div>
           </div>
-          {/* Startup — agency context only, required when startups exist and feature is enabled */}
+
           {isAgency && !parentAsset && startups.length > 0 && startupsEnabled && (
             <div className="space-y-1.5 sm:col-span-2">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
@@ -366,7 +380,7 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
               />
             </div>
           )}
-          {/* Campaign Event — agency context, when not pre-filled */}
+
           {isAgency && !parentAsset && !campaignEventId && campaignEvents.length > 0 && (
             <div className="space-y-1.5 sm:col-span-2">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Campaign Event (optional)</label>
@@ -377,7 +391,7 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
               />
             </div>
           )}
-          {/* Target Date — required, read-only if pre-filled from campaign event */}
+
           {!parentAsset && (
             <div className="space-y-1.5 sm:col-span-2">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">

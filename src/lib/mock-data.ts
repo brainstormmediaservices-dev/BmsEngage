@@ -4,19 +4,41 @@ import { SocialAccount, PlatformConfig, SocialPost } from '../types/social';
 export const MOCK_STATS = [
   { label: 'Total Assets', value: '4,284', change: '+12.5%', trend: 'up' },
   { label: 'Storage Used', value: '1.2 TB', change: '+3.2%', trend: 'up' },
-  { label: 'Active Variants', value: '842', change: '+8%', trend: 'up' },
+  { label: 'Active Variants', value: '842', change: '+8%', trend: 'neutral' },
   { label: 'Team Members', value: '24', change: '0%', trend: 'neutral' },
 ];
 
+const baseMedia = {
+  context: 'personal' as const,
+  agencyId: null,
+  startupId: null,
+  campaignEventId: null,
+  targetDate: null,
+  approvalStatus: 'pending' as const,
+  approvedBy: null,
+  approvedAt: null,
+  comments: [],
+  corrections: [],
+  sharedWith: [],
+  pendingShareWith: [],
+  viewLog: [],
+  editLog: [],
+  deleteRequest: null,
+  ownerId: 'user1',
+  isOwner: true,
+};
+
 export const MOCK_MEDIA: MediaAsset[] = [
   {
+    ...baseMedia,
     id: '1',
-    category: 'Image',
+    category: 'Graphics Design',
+    subcategory: 'Flyer Design',
     title: 'Summer Campaign Hero',
     description: 'Main hero image for the 2024 summer collection campaign.',
     url: 'https://picsum.photos/seed/summer/1200/800',
     tags: ['summer', 'campaign', 'hero', '2024'],
-    status: 'Published',
+    status: 'Approved',
     visibility: 'Public',
     uploadedBy: 'Alex Rivera',
     metadata: {
@@ -50,13 +72,15 @@ export const MOCK_MEDIA: MediaAsset[] = [
     ]
   },
   {
+    ...baseMedia,
     id: '2',
-    category: 'Video',
+    category: 'Social Media Content',
+    subcategory: 'Reels',
     title: 'Product Launch Teaser',
     description: '15-second teaser for the upcoming product launch.',
     url: 'https://picsum.photos/seed/launch/1920/1080',
     tags: ['launch', 'teaser', 'video', 'social'],
-    status: 'Published',
+    status: 'Approved',
     visibility: 'Team',
     uploadedBy: 'Sarah Chen',
     metadata: {
@@ -75,13 +99,15 @@ export const MOCK_MEDIA: MediaAsset[] = [
     variants: []
   },
   {
+    ...baseMedia,
     id: '3',
-    category: 'Flyer',
+    category: 'Printing Design',
+    subcategory: 'Flyers',
     title: 'Annual Sale Event',
     description: 'Promotional flyer for the annual clearance sale.',
     url: 'https://picsum.photos/seed/sale/1000/1414',
     tags: ['sale', 'flyer', 'print', 'promo'],
-    status: 'Draft',
+    status: 'In Development',
     visibility: 'Private',
     uploadedBy: 'Alex Rivera',
     metadata: {
@@ -98,13 +124,15 @@ export const MOCK_MEDIA: MediaAsset[] = [
     variants: []
   },
   {
+    ...baseMedia,
     id: '4',
-    category: 'Graphics',
+    category: 'Branding',
+    subcategory: 'Logo Design',
     title: 'Brand Logo Set',
     description: 'Official brand logo assets in various formats.',
     url: 'https://picsum.photos/seed/logo/800/800',
     tags: ['brand', 'logo', 'identity', 'vector'],
-    status: 'Published',
+    status: 'Approved',
     visibility: 'Public',
     uploadedBy: 'Marcus Miller',
     metadata: {
@@ -119,13 +147,15 @@ export const MOCK_MEDIA: MediaAsset[] = [
     variants: []
   },
   {
+    ...baseMedia,
     id: '5',
-    category: 'Image',
+    category: 'Graphics Design',
+    subcategory: 'Social Media Graphics',
     title: 'Office Lifestyle 01',
     description: 'Candid shot of the creative team in the studio.',
     url: 'https://picsum.photos/seed/office/1200/800',
     tags: ['lifestyle', 'office', 'team', 'culture'],
-    status: 'Published',
+    status: 'Approved',
     visibility: 'Team',
     uploadedBy: 'Sarah Chen',
     metadata: {
@@ -142,8 +172,10 @@ export const MOCK_MEDIA: MediaAsset[] = [
     variants: []
   },
   {
+    ...baseMedia,
     id: '6',
-    category: 'Video',
+    category: 'Social Media Content',
+    subcategory: 'Motion Graphics',
     title: 'Client Testimonial',
     description: 'Interview with the CEO of our top client.',
     url: 'https://picsum.photos/seed/interview/1920/1080',

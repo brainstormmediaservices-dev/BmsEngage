@@ -41,7 +41,7 @@ function AssetCellItem({ assets, onOpen }: { assets: MediaAsset[]; onOpen: (a: M
       <div onClick={e => { e.stopPropagation(); onOpen(asset); }}
         className="relative rounded-lg overflow-hidden border border-white/10 cursor-pointer hover:border-primary/50 transition-all group/ac"
         style={{ aspectRatio: '4/3' }}>
-        {asset.category === 'Video'
+        {asset.metadata?.mimeType?.startsWith('video/')
           ? <video src={displayUrl} className="w-full h-full object-cover" muted />
           : <img src={displayUrl} alt={asset.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
         }
@@ -219,7 +219,7 @@ export default function SchedulerPage() {
                   <div key={asset.id} onClick={() => { setSelectedAsset(asset); setIsAssetDetailOpen(true); }}
                     className="rounded-lg overflow-hidden border border-white/10 cursor-pointer hover:border-primary/50 transition-all">
                     <div className="aspect-video">
-                      {asset.category === 'Video'
+                      {asset.metadata?.mimeType?.startsWith('video/')
                         ? <video src={url} className="w-full h-full object-cover" muted />
                         : <img src={url} alt={asset.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       }

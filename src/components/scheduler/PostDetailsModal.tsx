@@ -23,6 +23,7 @@ import { SocialPost } from '../../types/social';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
 import { motion } from 'motion/react';
+import { PostStatusTracker } from '../posts/PostStatusTracker';
 
 const platformIcons: Record<string, any> = {
   Instagram,
@@ -112,6 +113,19 @@ export const PostDetailsModal = ({ isOpen, onClose, post, onEdit, onDelete }: Po
                   <Calendar size={16} className="text-primary" />
                   <span className="text-xs font-bold text-text">{format(dateObj, 'EEEE, MMMM do, yyyy')}</span>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-text-muted">Platform Status</h4>
+                <PostStatusTracker
+                  postId={post.id}
+                  platforms={(post as any).platforms || []}
+                  status={(post.status || 'draft').toLowerCase() as any}
+                  platformResults={(post as any).platformResults}
+                  error={(post as any).error}
+                  scheduledTime={(post as any).scheduledDate || (post as any).scheduledTime}
+                  publishedAt={(post as any).publishedDate || (post as any).publishedAt}
+                />
               </div>
 
               {post.engagement && (

@@ -173,7 +173,7 @@ export default function CreativeDashboard() {
                     onClick={() => { setSelectedAsset(asset); setIsDetailOpen(true); }}
                   >
                     <div className="aspect-video relative overflow-hidden">
-                      {asset.category === 'Video'
+                      {asset.metadata?.mimeType?.startsWith('video/')
                         ? <video src={asset.url} className="w-full h-full object-cover" muted />
                         : <img src={asset.url} alt={asset.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" referrerPolicy="no-referrer" />
                       }

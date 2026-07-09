@@ -143,10 +143,13 @@ export const MediaAssetCard = ({
 
   const getCategoryIcon = () => {
     switch (asset.category) {
-      case 'Flyer': return <FileText size={14} />;
-      case 'Image': return <ImageIcon size={14} />;
-      case 'Video': return <Film size={14} />;
-      case 'Graphics': return <Layers size={14} />;
+      case 'Graphics Design': return <Layers size={14} />;
+      case 'Social Media Content': return <ImageIcon size={14} />;
+      case 'Branding': return <Layers size={14} />;
+      case 'Printing Design': return <FileText size={14} />;
+      case 'Web & Digital Design': return <ImageIcon size={14} />;
+      case 'Marketing & Advertising Creatives': return <Film size={14} />;
+      case 'Presentation & Documents': return <FileText size={14} />;
       default: return <ImageIcon size={14} />;
     }
   };
@@ -177,7 +180,7 @@ export const MediaAssetCard = ({
     >
       {/* Thumbnail */}
       <div className="aspect-[4/3] rounded-t-2xl overflow-hidden relative">
-        {displayAsset.metadata?.mimeType?.startsWith('video/') || asset.category === 'Video' ? (
+        {displayAsset.metadata?.mimeType?.startsWith('video/') ? (
           <video src={displayAsset.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" muted />
         ) : (
           <img src={displayAsset.url} alt={asset.title}
@@ -204,7 +207,7 @@ export const MediaAssetCard = ({
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-[10px] font-bold uppercase tracking-wider text-white">
-            {getCategoryIcon()} {asset.category}
+            {getCategoryIcon()} {(asset as any).subcategory || asset.category}
           </div>
           <div className="px-2.5 py-1 rounded-lg bg-primary/80 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider text-white">
             {displayAsset.metadata.fileType}

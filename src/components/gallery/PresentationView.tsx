@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   X, ChevronLeft, ChevronRight, MessageSquare, AlertCircle,
   Send, CheckCircle2, User, Building2, Layers, Clock,
-  Trash2, Reply, Smile, Check, History,
+  Trash2, Reply, Smile, Check, History, Play, Pause,
+  Expand, Minimize, Monitor,
 } from 'lucide-react';
 import { MediaAsset } from '../../types/media';
 import { cn } from '../../lib/utils';
@@ -22,19 +23,19 @@ interface PresentationViewProps {
   onClose: () => void;
   onAssetUpdate: (asset: MediaAsset) => void;
   startups?: { id: string; name: string; logo: string | null }[];
-  /** When true: Creative mode — hides approve/reject/corrections, shows only own assets */
   isCreativeMode?: boolean;
 }
 
 type PanelTab = 'comments' | 'revisions';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉'];
+const SLIDESHOW_INTERVAL = 5000;
 
 export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpdate, startups = [], isCreativeMode = false }: PresentationViewProps) => {
   const [index, setIndex] = useState(initialIndex);
   const [panelTab, setPanelTab] = useState<PanelTab>('comments');
   const [localAssets, setLocalAssets] = useState<MediaAsset[]>(assets);
-  const [activeVariantId, setActiveVariantId] = useState<string | null>(null); // null = original
+  const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [correctionText, setCorrectionText] = useState('');
   const [correctionTimestamp, setCorrectionTimestamp] = useState('');
@@ -43,27 +44,29 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
   const [replyText, setReplyText] = useState('');
   const [showEmojiFor, setShowEmojiFor] = useState<string | null>(null);
   const [approvingStatus, setApprovingStatus] = useState<'approved' | 'rejected' | null>(null);
+  const [slideshowPlaying, setSlideshowPlaying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [hoveringPreview, setHoveringPreview] = useState(false);
+  const slideshowRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   const { canComment, canRequestCorrection, canApproveAsset } = usePermissions();
 
-  // In Creative mode, override all restricted permissions regardless of role
   const effectiveCanComment = isCreativeMode ? true : canComment;
   const effectiveCanRequestCorrection = isCreativeMode ? false : canRequestCorrection;
   const effectiveCanApprove = isCreativeMode ? false : canApproveAsset;
 
   const asset = localAssets[index];
 
-  // Sorted variants — latest first
-  const sortedVariants = React.useMemo(() => {
+  const sortedVariants = useMemo(() => {
     if (!asset) return [];
     return [...asset.variants].sort((a, b) =>
       new Date(b.metadata.createdDate).getTime() - new Date(a.metadata.createdDate).getTime()
     );
   }, [asset]);
 
-  // Active display: selected variant or latest or original
-  const displayAsset = React.useMemo(() => {
+  const displayAsset = useMemo(() => {
     if (!asset) return null;
     if (activeVariantId) {
       const v = asset.variants.find(v => v.id === activeVariantId);
@@ -73,8 +76,56 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
     return asset;
   }, [asset, activeVariantId, sortedVariants]);
 
-  // Reset variant selection when switching assets
   useEffect(() => { setActiveVariantId(null); }, [index]);
+
+  const goNext = useCallback(() => {
+    if (index < localAssets.length - 1) setIndex(i => i + 1);
+    else setSlideshowPlaying(false);
+  }, [index, localAssets.length]);
+
+  const goPrev = useCallback(() => {
+    setIndex(i => Math.max(0, i - 1));
+  }, []);
+
+  const toggleSlideshow = useCallback(() => {
+    setSlideshowPlaying(p => !p);
+  }, []);
+
+  // Slideshow timer
+  useEffect(() => {
+    if (!slideshowPlaying || localAssets.length <= 1) {
+      if (slideshowRef.current) { clearInterval(slideshowRef.current); slideshowRef.current = null; }
+      return;
+    }
+    slideshowRef.current = setInterval(goNext, SLIDESHOW_INTERVAL);
+    return () => { if (slideshowRef.current) { clearInterval(slideshowRef.current); slideshowRef.current = null; } };
+  }, [slideshowPlaying, goNext, localAssets.length]);
+
+  // Pause on hover
+  useEffect(() => {
+    if (hoveringPreview && slideshowPlaying) {
+      if (slideshowRef.current) { clearInterval(slideshowRef.current); slideshowRef.current = null; }
+    } else if (!hoveringPreview && slideshowPlaying && localAssets.length > 1) {
+      slideshowRef.current = setInterval(goNext, SLIDESHOW_INTERVAL);
+    }
+    return () => { if (slideshowRef.current) { clearInterval(slideshowRef.current); slideshowRef.current = null; } };
+  }, [hoveringPreview, slideshowPlaying, goNext, localAssets.length]);
+
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      try { await document.documentElement.requestFullscreen(); setIsFullscreen(true); }
+      catch {}
+    } else {
+      try { await document.exitFullscreen(); setIsFullscreen(false); }
+      catch {}
+    }
+  };
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   const startupInfo = asset?.startupId ? startups.find(s => s.id === asset.startupId) ?? null : null;
   const startupName = startupInfo?.name ?? null;
@@ -87,9 +138,13 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') setIndex(i => Math.max(0, i - 1));
-      if (e.key === 'ArrowRight') setIndex(i => Math.min(localAssets.length - 1, i + 1));
+      if (e.key === 'Escape') {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else onClose();
+      }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+      if (e.key === ' ') { e.preventDefault(); toggleSlideshow(); }
     };
     document.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
@@ -97,7 +152,7 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
       document.removeEventListener('keydown', handler);
       document.body.style.overflow = '';
     };
-  }, [localAssets.length, onClose]);
+  }, [onClose, goPrev, goNext, toggleSlideshow]);
 
   const handleAddComment = async () => {
     if (!asset || !commentText.trim()) return;
@@ -160,7 +215,7 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
     try {
       const updated = await approveAsset(asset.id, status);
       sync(updated);
-      toast(status === 'approved' ? 'Asset approved ✅' : 'Asset rejected', status === 'approved' ? 'success' : 'info');
+      toast(status === 'approved' ? 'Asset approved' : 'Asset rejected', status === 'approved' ? 'success' : 'info');
     } catch { toast('Failed to update approval', 'error'); }
     finally { setApprovingStatus(null); }
   };
@@ -171,37 +226,76 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
 
   return (
     <div className="fixed inset-0 z-[60] bg-black flex flex-col lg:flex-row">
-      {/* ── Close + nav ─────────────────────────────────────────────── */}
-      <button onClick={onClose}
-        className="absolute top-4 left-4 z-10 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
-        <X size={20} />
-      </button>
-
-      {/* Asset counter + Creative mode badge */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-        <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-white text-xs font-bold">
-          {index + 1} / {localAssets.length}
-        </div>
-        {isCreativeMode && (
-          <div className="px-3 py-1.5 rounded-full bg-primary/80 backdrop-blur-sm text-white text-xs font-bold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80 inline-block" />
-            My Assets
+      {/* ── Top bar ─────────────────────────────────────────────────── */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="flex items-center gap-2">
+          <button onClick={onClose}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+            <X size={18} />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm text-white text-xs font-bold tabular-nums">
+              {index + 1} / {localAssets.length}
+            </div>
+            {isCreativeMode && (
+              <div className="px-3 py-1.5 rounded-full bg-primary/80 backdrop-blur-sm text-white text-xs font-bold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-white/80 inline-block" />
+                My Assets
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {localAssets.length > 1 && (
+            <button onClick={toggleSlideshow}
+              className={cn('p-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold',
+                slideshowPlaying
+                  ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                  : 'bg-white/10 hover:bg-white/20 text-white'
+              )}
+              title={slideshowPlaying ? 'Pause slideshow (Space)' : 'Start slideshow (Space)'}>
+              {slideshowPlaying ? <Pause size={15} /> : <Play size={15} />}
+              <span className="hidden sm:inline">{slideshowPlaying ? 'Pause' : 'Play'}</span>
+            </button>
+          )}
+          <button onClick={toggleFullscreen}
+            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all"
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+            {isFullscreen ? <Minimize size={16} /> : <Expand size={16} />}
+          </button>
+        </div>
       </div>
 
+      {/* ── Progress dots ──────────────────────────────────────────── */}
+      {localAssets.length > 1 && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 max-w-[80vw] overflow-hidden px-2">
+          {localAssets.map((_, i) => (
+            <button key={i} onClick={() => { setIndex(i); setSlideshowPlaying(false); }}
+              className={cn('h-1.5 rounded-full transition-all shrink-0',
+                i === index
+                  ? 'bg-white w-6'
+                  : 'bg-white/30 hover:bg-white/50 w-1.5'
+              )} />
+          ))}
+        </div>
+      )}
+
       {/* ── Left: full-screen asset preview ─────────────────────────── */}
-      <div className="flex-1 relative flex items-center justify-center bg-black min-h-0">
+      <div ref={previewRef}
+        onMouseEnter={() => setHoveringPreview(true)}
+        onMouseLeave={() => setHoveringPreview(false)}
+        className="flex-1 relative flex items-center justify-center bg-black min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
-            key={asset.id}
-            initial={{ opacity: 0, scale: 0.97 }}
+            key={asset.id + (activeVariantId || '')}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.97 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="w-full h-full flex items-center justify-center p-4 lg:p-8"
           >
-            {asset.category === 'Video' ? (
+            {asset.metadata?.mimeType?.startsWith('video/') ? (
               <video
                 src={displayAsset.url}
                 controls
@@ -218,12 +312,12 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
           </motion.div>
         </AnimatePresence>
 
-        {/* Startup watermark — top right of asset when startup is assigned */}
+        {/* Startup watermark */}
         {startupInfo && (
-          <div className="absolute top-16 right-4 z-10 flex items-center gap-2 px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/10">
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2 px-3 py-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/10">
             {startupInfo.logo
-              ? <img src={startupInfo.logo} alt={startupInfo.name} className="w-7 h-7 rounded-lg object-cover" />
-              : <div className="w-7 h-7 rounded-lg bg-primary/30 flex items-center justify-center text-white font-black text-xs">
+              ? <img src={startupInfo.logo} alt={startupInfo.name} className="w-6 h-6 rounded-lg object-cover" />
+              : <div className="w-6 h-6 rounded-lg bg-primary/30 flex items-center justify-center text-white font-black text-xs">
                   {startupInfo.name.charAt(0).toUpperCase()}
                 </div>
             }
@@ -231,22 +325,22 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
           </div>
         )}
 
-        {/* Prev / Next arrows */}
+        {/* Prev / Next arrows — visible on hover or always on mobile */}
         {index > 0 && (
-          <button onClick={() => setIndex(i => i - 1)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-all">
-            <ChevronLeft size={24} />
+          <button onClick={() => { goPrev(); setSlideshowPlaying(false); }}
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-2xl bg-black/40 hover:bg-black/60 text-white transition-all opacity-60 hover:opacity-100">
+            <ChevronLeft size={22} />
           </button>
         )}
         {index < localAssets.length - 1 && (
-          <button onClick={() => setIndex(i => i + 1)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-all">
-            <ChevronRight size={24} />
+          <button onClick={() => { goNext(); setSlideshowPlaying(false); }}
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-2xl bg-black/40 hover:bg-black/60 text-white transition-all opacity-60 hover:opacity-100">
+            <ChevronRight size={22} />
           </button>
         )}
 
         {/* ── Asset info bar at bottom ─────────────────────────────── */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-4 sm:px-8 py-4 sm:py-6">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 sm:px-8 pt-12 pb-4 sm:pb-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1">
               <h2 className="text-white font-black text-lg sm:text-2xl leading-tight">{asset.title}</h2>
@@ -264,7 +358,7 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
                   </span>
                 )}
                 <span className="flex items-center gap-1.5">
-                  <Layers size={13} /> v{asset.variants.length + 1} total
+                  <Layers size={13} /> v{asset.variants.length + 1}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Clock size={13} /> {new Date(asset.metadata.createdDate).toLocaleDateString()}
@@ -294,7 +388,6 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Approval badge */}
               <span className={cn('px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest',
                 asset.approvalStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-400' :
                 asset.approvalStatus === 'rejected' ? 'bg-red-500/20 text-red-400' :
@@ -303,7 +396,6 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
                 {asset.approvalStatus === 'pending' ? 'Pending' : asset.approvalStatus}
               </span>
 
-              {/* Approve / Reject buttons — executives/production/marketing only */}
               {effectiveCanApprove && (
                 <>
                   {asset.approvalStatus !== 'approved' && (
@@ -333,7 +425,6 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
 
       {/* ── Right: comments + revisions panel ───────────────────────── */}
       <div className="w-full lg:w-[380px] xl:w-[420px] bg-[#0E0E11] border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col max-h-[45vh] lg:max-h-none">
-        {/* Panel tabs — hide Revisions tab in Creative mode */}
         <div className="flex gap-1 p-3 border-b border-white/10 shrink-0">
           {([
             { key: 'comments' as PanelTab, label: 'Comments', icon: <MessageSquare size={14} />, count: asset.comments.length },
@@ -353,7 +444,6 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
           ))}
         </div>
 
-        {/* Scrollable list */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {panelTab === 'comments' && (
             <>
@@ -496,7 +586,6 @@ export const PresentationView = ({ assets, initialIndex = 0, onClose, onAssetUpd
           )}
         </div>
 
-        {/* Input area */}
         <div className="p-3 border-t border-white/10 shrink-0">
           {panelTab === 'comments' && effectiveCanComment && (
             <div className="flex gap-2">

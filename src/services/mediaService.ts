@@ -22,6 +22,7 @@ export const mediaService = {
   uploadSingle: async (file: File, formData: {
     title: string;
     category: string;
+    subcategory?: string;
     description: string;
     tags: string;
     visibility: string;
@@ -33,6 +34,7 @@ export const mediaService = {
     data.append('file', file);
     data.append('title', formData.title || file.name.split('.')[0]);
     data.append('category', formData.category);
+    if (formData.subcategory) data.append('subcategory', formData.subcategory);
     data.append('description', formData.description);
     data.append('tags', formData.tags);
     data.append('visibility', formData.visibility);
@@ -49,10 +51,11 @@ export const mediaService = {
     return res.data.media;
   },
 
-  uploadMultiple: async (files: File[], options: { category?: string; status?: string; visibility?: string } = {}): Promise<MediaAsset[]> => {
+  uploadMultiple: async (files: File[], options: { category?: string; subcategory?: string; status?: string; visibility?: string } = {}): Promise<MediaAsset[]> => {
     const data = new FormData();
     files.forEach(f => data.append('files', f));
     if (options.category) data.append('category', options.category);
+    if (options.subcategory) data.append('subcategory', options.subcategory);
     if (options.status) data.append('status', options.status);
     if (options.visibility) data.append('visibility', options.visibility);
     const res = await api.post('/media/upload-multiple', data, {

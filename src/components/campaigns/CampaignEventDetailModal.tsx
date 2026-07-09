@@ -256,7 +256,7 @@ export const CampaignEventDetailModal = ({ isOpen, onClose, event }: Props) => {
                   {assets.map(a => (
                     <button key={a.id} onClick={() => setViewAsset(a)}
                       className="relative aspect-square rounded-xl overflow-hidden border border-white/10 hover:border-primary/50 transition-all group">
-                      {a.category === 'Video'
+                      {a.metadata?.mimeType?.startsWith('video/')
                         ? <video src={a.url} className="w-full h-full object-cover" muted />
                         : <img src={a.url} alt={a.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       }

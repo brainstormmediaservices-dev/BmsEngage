@@ -89,7 +89,7 @@ export default function SharedAssetPage() {
     </div>
   );
 
-  const isVideo = asset.metadata.mimeType?.startsWith('video/') || asset.category === 'Video';
+  const isVideo = asset.metadata.mimeType?.startsWith('video/');
   const isPdf = activeVersion.metadata.mimeType === 'application/pdf';
   const totalVersions = sortedVariants.length + 1;
 
@@ -205,7 +205,7 @@ export default function SharedAssetPage() {
               {/* Category + type */}
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  {asset.category === 'Video' ? <Film size={20} /> : asset.category === 'Image' ? <ImageIcon size={20} /> : <FileText size={20} />}
+                  {asset.metadata?.mimeType?.startsWith('video/') ? <Film size={20} /> : asset.metadata?.mimeType?.startsWith('image/') ? <ImageIcon size={20} /> : <FileText size={20} />}
                 </div>
                 <div>
                   <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{asset.category}</p>

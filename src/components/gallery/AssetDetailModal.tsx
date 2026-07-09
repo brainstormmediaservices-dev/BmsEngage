@@ -220,7 +220,7 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
         {/* Left: Preview + Version History */}
         <div className="flex-1 space-y-6">
           <div ref={previewRef} className="relative aspect-video bg-black/40 rounded-3xl overflow-hidden border border-border group flex items-center justify-center">
-            {localAsset.category === 'Video' ? (
+            {localAsset.metadata?.mimeType?.startsWith('video/') ? (
               <video src={activeVariant.url} controls className="w-full h-full object-contain" preload="metadata" />
             ) : (
               <img src={activeVariant.url} alt={activeVariant.title} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
@@ -291,11 +291,11 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                    {localAsset.category === 'Image' ? <ImageIcon size={20} /> : localAsset.category === 'Video' ? <Film size={20} /> : <FileText size={20} />}
+                    <FileText size={20} />
                   </div>
                   <div>
-                    <p className="text-xs text-text-muted font-bold uppercase tracking-widest">{localAsset.category}</p>
-                    <p className="text-sm font-bold text-text">{metadata.fileType} Asset</p>
+                    <p className="text-xs text-text-muted font-bold uppercase tracking-widest">{(localAsset as any).subcategory || localAsset.category}</p>
+                    <p className="text-sm font-bold text-text">{localAsset.category}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -694,7 +694,7 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
               </div>
               <div className="flex flex-col gap-2 pt-3 border-t border-border">
                 {/* Optional timestamp for videos */}
-                {localAsset.category === 'Video' && (
+                {localAsset.metadata?.mimeType?.startsWith('video/') && (
                   <input
                     value={correctionTimestamp}
                     onChange={e => setCorrectionTimestamp(e.target.value)}

@@ -2,7 +2,7 @@ import api from './api';
 
 export interface ConnectedAccount {
   id: string;
-  platform: 'meta' | 'twitter' | 'linkedin' | 'tiktok';
+  platform: 'meta' | 'twitter' | 'linkedin' | 'tiktok' | 'instagram';
   accountId: string;
   username: string;
   displayName: string;
@@ -10,6 +10,7 @@ export interface ConnectedAccount {
   tokenExpiry: string | null;
   isActive: boolean;
   meta?: { pageId: string; pageName: string };
+  instagram?: { igUserId: string; igUsername: string };
   tiktok?: { openId: string };
   createdAt: string;
 }
@@ -34,7 +35,7 @@ export interface PlatformInsights {
 }
 
 export const socialService = {
-  connectPlatform: (platform: 'meta' | 'twitter' | 'linkedin' | 'tiktok') => {
+  connectPlatform: (platform: 'meta' | 'twitter' | 'linkedin' | 'tiktok' | 'instagram') => {
     const token = localStorage.getItem('token');
     window.location.href = `${BASE_URL}/api/social/auth/${platform}?token=${token}`;
   },

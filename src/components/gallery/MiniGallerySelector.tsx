@@ -121,7 +121,7 @@ export const MiniGallerySelector = ({ selectedAssets, onSelect, onRemove, multip
                   className={cn('relative aspect-square rounded-xl overflow-hidden border-2 transition-all group',
                     sel ? 'border-primary shadow-lg shadow-primary/20' : 'border-transparent hover:border-white/20'
                   )}>
-                  {asset.category === 'Video'
+                  {asset.metadata?.mimeType?.startsWith('video/')
                     ? <video src={displayUrl} className="w-full h-full object-cover" muted />
                     : <img src={displayUrl} alt={asset.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   }

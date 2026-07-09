@@ -738,7 +738,7 @@ function SecurityTab({ user, onRefresh, toast }: { user: UserType | null; onRefr
                   <div>
                     <p className="text-sm font-bold text-text truncate max-w-[200px]">{entry.device || entry.userAgent || 'Unknown device'}</p>
                     <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">
-                      {entry.ip} {entry.location ? `• ${entry.location}` : ''}
+                      {entry.ip} {(entry as any).location ? `• ${(entry as any).location}` : ''}
                     </p>
                   </div>
                 </div>

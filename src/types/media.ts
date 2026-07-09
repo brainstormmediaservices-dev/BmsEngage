@@ -1,4 +1,4 @@
-export type MediaCategory = 'Flyer' | 'Image' | 'Video' | 'Graphics';
+export type MediaCategory = 'Graphics Design' | 'Social Media Content' | 'Branding' | 'Printing Design' | 'Web & Digital Design' | 'Marketing & Advertising Creatives' | 'Presentation & Documents';
 export type MediaStatus = 'In Development' | 'Sent for Correction' | 'Corrected' | 'Approved' | 'Archived';
 export type MediaVisibility = 'Private' | 'Public' | 'Team';
 
@@ -74,6 +74,7 @@ export interface MediaAsset {
   approvedBy: string | null;
   approvedAt: string | null;
   category: MediaCategory;
+  subcategory: string;
   title: string;
   description: string;
   url: string;

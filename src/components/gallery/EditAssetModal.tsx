@@ -7,6 +7,7 @@ import {
   Film, Layers, ChevronDown, Loader2, Building2, Calendar, Flag,
 } from 'lucide-react';
 import { MediaAsset, MediaVisibility, MediaCategory } from '../../types/media';
+import { CATEGORIES, MAIN_CATEGORIES, type MainCategory } from '../../constants/mediaCategories';
 import { useToast } from '../ui/Toast';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -52,7 +53,8 @@ export const EditAssetModal = ({ isOpen, onClose, asset, onSave }: EditAssetModa
       setLocalAsset(asset);
       setFormData({
         title: asset.title || '',
-        category: asset.category || 'Image',
+        category: (asset.category as MainCategory) || 'Graphics Design',
+        subcategory: (asset as any).subcategory || '',
         description: asset.description || '',
         tags: asset.tags?.join(', ') || '',
         visibility: asset.visibility || 'Public',
@@ -111,10 +113,13 @@ export const EditAssetModal = ({ isOpen, onClose, asset, onSave }: EditAssetModa
 
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
-      case 'Flyer': return <FileText size={16} />;
-      case 'Image': return <ImageIcon size={16} />;
-      case 'Video': return <Film size={16} />;
-      case 'Graphics': return <Layers size={16} />;
+      case 'Graphics Design': return <Layers size={16} />;
+      case 'Social Media Content': return <ImageIcon size={16} />;
+      case 'Branding': return <Layers size={16} />;
+      case 'Printing Design': return <FileText size={16} />;
+      case 'Web & Digital Design': return <ImageIcon size={16} />;
+      case 'Marketing & Advertising Creatives': return <Film size={16} />;
+      case 'Presentation & Documents': return <FileText size={16} />;
       default: return <ImageIcon size={16} />;
     }
   };
@@ -129,7 +134,7 @@ export const EditAssetModal = ({ isOpen, onClose, asset, onSave }: EditAssetModa
             <div className="space-y-3">
               <h4 className="text-xs font-black uppercase tracking-widest text-text-muted">Preview</h4>
               <div className="relative aspect-square rounded-2xl overflow-hidden border border-border bg-white/5">
-                {localAsset.category === 'Video'
+                {localAsset.metadata?.mimeType?.startsWith('video/')
                   ? <video src={localAsset.url} className="w-full h-full object-cover" muted />
                   : <img src={localAsset.url} alt={localAsset.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 }
@@ -184,17 +189,30 @@ export const EditAssetModal = ({ isOpen, onClose, asset, onSave }: EditAssetModa
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Category */}
+              {/* Main Category */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black text-text-muted uppercase tracking-widest">Category</label>
                 <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-primary">{getCategoryIcon(formData.category)}</div>
-                  <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value as MediaCategory })}
-                    className="w-full h-12 bg-white/5 border border-white/10 rounded-xl pl-9 pr-9 text-sm font-bold text-text outline-none focus:border-primary/50 appearance-none transition-all">
-                    <option value="Image">Image</option>
-                    <option value="Video">Video</option>
-                    <option value="Flyer">Flyer</option>
-                    <option value="Graphics">Graphics</option>
+                  <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value as MainCategory, subcategory: '' })}
+                    className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 pr-9 text-sm font-bold text-text outline-none focus:border-primary/50 appearance-none transition-all">
+                    {MAIN_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
+                </div>
+              </div>
+
+              {/* Subcategory */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-text-muted uppercase tracking-widest">Type</label>
+                <div className="relative">
+                  <select value={formData.subcategory} onChange={e => setFormData({ ...formData, subcategory: e.target.value })}
+                    className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 pr-9 text-sm font-bold text-text outline-none focus:border-primary/50 appearance-none transition-all">
+                    <option value="">Select type...</option>
+                    {(CATEGORIES[formData.category] || []).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
                 </div>

@@ -10,7 +10,8 @@ export type SocialPlatform =
   | 'meta'
   | 'twitter'
   | 'linkedin'
-  | 'tiktok';
+  | 'tiktok'
+  | 'instagram';
 
 export type PostStatus = 'Draft' | 'Scheduled' | 'Published' | 'Failed';
 
@@ -26,6 +27,8 @@ export interface SocialAccount {
   connectedAt: string;
   tokenExpiry?: string | null;
   meta?: { pageId: string; pageName: string };
+  instagram?: { igUserId: string; igUsername: string };
+  tiktok?: { openId: string };
 }
 
 export interface PlatformConfig {
