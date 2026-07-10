@@ -146,6 +146,11 @@ export const addCorrection = async (mediaId: string, text: string, timestamp?: s
   return res.data.media;
 };
 
+export const markCommentAsRevision = async (mediaId: string, commentText: string): Promise<MediaAsset> => {
+  const res = await api.post(`/media/${mediaId}/corrections`, { text: `[Marked as Revision] ${commentText}` });
+  return res.data.media;
+};
+
 export const updateCorrectionStatus = async (mediaId: string, correctionId: string, status: 'open' | 'in_progress' | 'resolved'): Promise<MediaAsset> => {
   const res = await api.patch(`/media/${mediaId}/corrections/${correctionId}/status`, { status });
   return res.data.media;

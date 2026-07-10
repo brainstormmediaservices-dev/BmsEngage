@@ -58,7 +58,8 @@ export default function NotificationsPage() {
       const found = notifications.find(n => n._id === id);
       if (found) {
         setSelected(found);
-        if (!found.read) markAsRead(found._id);
+        const isPendingInvite = found.type === 'team_invite' && found.data?.inviteId;
+        if (!found.read && !isPendingInvite) markAsRead(found._id);
       }
     }
   }, [searchParams, notifications]);
@@ -66,7 +67,8 @@ export default function NotificationsPage() {
   const handleSelect = (n: Notification) => {
     setSelected(n);
     setSearchParams({ id: n._id }, { replace: true });
-    if (!n.read) markAsRead(n._id);
+    const isPendingInvite = n.type === 'team_invite' && n.data?.inviteId;
+    if (!n.read && !isPendingInvite) markAsRead(n._id);
   };
 
   const handleDelete = (id: string) => {

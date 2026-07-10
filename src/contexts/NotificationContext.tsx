@@ -79,7 +79,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const markAllAsRead = async () => {
     try {
       await api.patch('/notifications/read-all');
-      setAllNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setAllNotifications(prev => prev.map(n =>
+        n.type === 'team_invite' && n.data?.inviteId ? n : { ...n, read: true }
+      ));
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -144,7 +146,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   }, [user?.id, fetchNotifications]);
 
   const notifications = allNotifications;
-  const unreadNotifications = allNotifications.filter(n => !n.read);
+  const unreadNotifications = allNotifications.filter(n =>
+    !n.read || (n.type === 'team_invite' && n.data?.inviteId)
+  );
   const unreadCount = unreadNotifications.length;
 
   return (

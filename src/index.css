@@ -135,3 +135,12 @@ textarea[spellcheck="true"] {
 .sidebar-glow {
   animation: sidebar-glow 4s ease-in-out infinite;
 }
+
+/* ── Hide scrollbar ─────────────────────────────────────────────────────── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

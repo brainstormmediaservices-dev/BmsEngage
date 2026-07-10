@@ -11,7 +11,7 @@ import {
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../ui/Toast';
-import { addComment, deleteComment, addCorrection, resolveCorrection, deleteCorrection, replyToComment, reactToComment, approveAsset, editComment, getTeamUsers, TeamUser, getDeliveryTracking, getAuditLog, markAsPosted } from '../../services/mediaService';
+import { addComment, deleteComment, addCorrection, resolveCorrection, deleteCorrection, replyToComment, reactToComment, approveAsset, editComment, getTeamUsers, TeamUser, getDeliveryTracking, getAuditLog, markAsPosted, markCommentAsRevision } from '../../services/mediaService';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -193,6 +193,15 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
     finally { setSubmitting(false); }
   };
 
+  const handleMarkCommentAsRevision = async (commentText: string) => {
+    if (!localAsset) return;
+    try {
+      const updated = await markCommentAsRevision(localAsset.id, commentText);
+      sync(updated);
+      toast('Comment marked as revision request', 'success');
+    } catch { toast('Failed to mark as revision', 'error'); }
+  };
+
   const handleApprove = async (status: 'approved' | 'rejected') => {
     if (!localAsset) return;
     setApprovingStatus(status);
@@ -221,6 +230,17 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
     } catch { toast('Failed to delete correction', 'error'); }
   };
 
+  React.useEffect(() => {
+    if (rightTab === 'delivery' && localAsset && deliveryTracking.length === 0) {
+      setLoadingDelivery(true);
+      getDeliveryTracking(localAsset.id).then(setDeliveryTracking).catch(() => {}).finally(() => setLoadingDelivery(false));
+    }
+    if (rightTab === 'audit' && localAsset && auditLog.length === 0) {
+      setLoadingAudit(true);
+      getAuditLog(localAsset.id).then(setAuditLog).catch(() => {}).finally(() => setLoadingAudit(false));
+    }
+  }, [rightTab, localAsset?.id]);
+
   if (!localAsset || !activeVariant) return null;
   const metadata = activeVariant.metadata;
 
@@ -232,17 +252,6 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
     { key: 'delivery', label: 'Delivery', icon: <Activity size={14} />, count: localAsset.deliveryTracking?.length },
     { key: 'audit', label: 'Audit', icon: <CheckCircle size={14} /> },
   ];
-
-  React.useEffect(() => {
-    if (rightTab === 'delivery' && localAsset && deliveryTracking.length === 0) {
-      setLoadingDelivery(true);
-      getDeliveryTracking(localAsset.id).then(setDeliveryTracking).catch(() => {}).finally(() => setLoadingDelivery(false));
-    }
-    if (rightTab === 'audit' && localAsset && auditLog.length === 0) {
-      setLoadingAudit(true);
-      getAuditLog(localAsset.id).then(setAuditLog).catch(() => {}).finally(() => setLoadingAudit(false));
-    }
-  }, [rightTab, localAsset?.id]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={localAsset.title} maxWidth="max-w-6xl">
@@ -300,10 +309,10 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
         {/* Right: Tabbed Panel */}
         <div className="w-full lg:w-[380px] flex flex-col gap-4">
           {/* Tab bar */}
-          <div className="flex gap-1 p-1 bg-white/5 rounded-2xl border border-border">
+          <div className="flex gap-1 p-1 bg-white/5 rounded-2xl border border-border overflow-x-auto scrollbar-none">
             {tabs.map(tab => (
               <button key={tab.key} onClick={() => setRightTab(tab.key)}
-                className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all",
+                className={cn("flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0",
                   rightTab === tab.key ? "bg-primary text-white shadow-lg shadow-primary/30" : "text-text-muted hover:text-text"
                 )}>
                 {tab.icon} {tab.label}
@@ -561,7 +570,7 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                                       <Edit2 size={10} /> Edit
                                     </button>
                                   )}
-                                  <div className="relative">
+                                   <div className="relative">
                                     <button onClick={() => setShowEmojiFor(showEmojiFor === c.id ? null : c.id)}
                                       className="text-[10px] text-text-muted hover:text-primary transition-colors flex items-center gap-1">
                                       <Smile size={10} /> React
@@ -578,6 +587,12 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                                       )}
                                     </AnimatePresence>
                                   </div>
+                                  {canRequestCorrection && (
+                                    <button onClick={() => handleMarkCommentAsRevision(c.text)}
+                                      className="text-[10px] text-text-muted hover:text-orange-400 transition-colors flex items-center gap-1">
+                                      <AlertCircle size={10} /> Mark as Revision
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </div>
