@@ -76,18 +76,15 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
   React.useEffect(() => {
     if (asset) {
       setLocalAsset(asset);
-      setActiveVariant(prev => {
-        if (!prev) return asset.variants.length > 0
-          ? [...asset.variants].sort((a, b) => new Date(b.metadata.createdDate).getTime() - new Date(a.metadata.createdDate).getTime())[0]
-          : asset;
-        return prev;
-      });
     }
   }, [asset]);
 
   React.useEffect(() => {
     if (localAsset) {
-      if (sortedVariants.length > 0) setActiveVariant(sortedVariants[0]);
+      const sorted = [...localAsset.variants].sort((a, b) =>
+        new Date(b.metadata.createdDate).getTime() - new Date(a.metadata.createdDate).getTime()
+      );
+      if (sorted.length > 0) setActiveVariant(sorted[0]);
       else setActiveVariant(localAsset);
     }
   }, [localAsset?.id]);

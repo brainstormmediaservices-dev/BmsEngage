@@ -53,33 +53,33 @@ export const VideoPlayer = ({
   const [seekPreview, setSeekPreview] = useState<number | null>(null);
   const [hasAutoplayFailed, setHasAutoplayFailed] = useState(false);
 
-  const v = videoRef.current;
-
   // Auto-play with fallback to muted
   useEffect(() => {
-    if (!v || !autoPlay) return;
+    const vid = videoRef.current;
+    if (!vid || !autoPlay) return;
     const tryPlay = async () => {
       try {
-        await v.play();
+        await vid.play();
         setPlaying(true);
       } catch {
         setHasAutoplayFailed(true);
-        v.muted = true;
+        vid.muted = true;
         setMuted(true);
         try {
-          await v.play();
+          await vid.play();
           setPlaying(true);
         } catch { /* give up */ }
       }
     };
-    if (v.readyState >= 2) tryPlay();
-    else v.addEventListener('loadeddata', tryPlay, { once: true });
+    if (vid.readyState >= 2) tryPlay();
+    else vid.addEventListener('loadeddata', tryPlay, { once: true });
   }, [autoPlay, src]);
 
   // Seek externally
   useEffect(() => {
-    if (v && seekTo != null && seekTo >= 0) {
-      v.currentTime = seekTo;
+    const vid = videoRef.current;
+    if (vid && seekTo != null && seekTo >= 0) {
+      vid.currentTime = seekTo;
       setCurrentTime(seekTo);
     }
   }, [seekTo]);
@@ -93,40 +93,46 @@ export const VideoPlayer = ({
 
   // PiP event listeners
   useEffect(() => {
-    if (!v) return;
-    v.addEventListener('enterpictureinpicture', onPiPEnter);
-    v.addEventListener('leavepictureinpicture', onPiPLeave);
+    const vid = videoRef.current;
+    if (!vid) return;
+    const onEnter = () => setIsPiP(true);
+    const onLeave = () => setIsPiP(false);
+    vid.addEventListener('enterpictureinpicture', onEnter);
+    vid.addEventListener('leavepictureinpicture', onLeave);
     return () => {
-      v.removeEventListener('enterpictureinpicture', onPiPEnter);
-      v.removeEventListener('leavepictureinpicture', onPiPLeave);
+      vid.removeEventListener('enterpictureinpicture', onEnter);
+      vid.removeEventListener('leavepictureinpicture', onLeave);
     };
-  }, [v]);
+  }, []);
 
   // Keyboard shortcuts (only when container is focused or fullscreen)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!v) return;
+      const vid = videoRef.current;
+      if (!vid) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       switch (e.key) {
         case ' ':
         case 'k':
           e.preventDefault();
-          togglePlay();
+          if (vid.paused) { vid.play().catch(() => {}); setPlaying(true); }
+          else { vid.pause(); setPlaying(false); }
           break;
         case 'ArrowLeft':
           e.preventDefault();
-          v.currentTime = Math.max(0, v.currentTime - 10);
+          vid.currentTime = Math.max(0, vid.currentTime - 10);
           break;
         case 'ArrowRight':
           e.preventDefault();
-          v.currentTime = Math.min(v.duration || 0, v.currentTime + 10);
+          vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 10);
           break;
         case 'ArrowUp':
           e.preventDefault();
           setVolume(prev => {
             const nv = Math.min(1, prev + 0.1);
-            if (v) { v.volume = nv; v.muted = false; }
+            vid.volume = nv;
+            vid.muted = false;
             setMuted(false);
             return nv;
           });
@@ -135,39 +141,56 @@ export const VideoPlayer = ({
           e.preventDefault();
           setVolume(prev => {
             const nv = Math.max(0, prev - 0.1);
-            if (v) { v.volume = nv; }
+            vid.volume = nv;
             return nv;
           });
           break;
         case 'f':
           e.preventDefault();
-          toggleFullscreen();
+          {
+            const el = containerRef.current;
+            if (el) {
+              if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
+              else document.exitFullscreen().catch(() => {});
+            }
+          }
           break;
         case 'm':
           e.preventDefault();
-          toggleMute();
+          vid.muted = !vid.muted;
+          setMuted(vid.muted);
           break;
         case 'j':
           e.preventDefault();
-          v.currentTime = Math.max(0, v.currentTime - 10);
+          vid.currentTime = Math.max(0, vid.currentTime - 10);
           break;
         case 'l':
           e.preventDefault();
-          v.currentTime = Math.min(v.duration || 0, v.currentTime + 10);
+          vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 10);
           break;
         case ',':
           e.preventDefault();
-          cycleSpeed(-1);
+          {
+            const idx = SPEEDS.indexOf(speed);
+            const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, idx - 1))];
+            vid.playbackRate = next;
+            setSpeed(next);
+          }
           break;
         case '.':
           e.preventDefault();
-          cycleSpeed(1);
+          {
+            const idx = SPEEDS.indexOf(speed);
+            const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, idx + 1))];
+            vid.playbackRate = next;
+            setSpeed(next);
+          }
           break;
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [v, volume]);
+  }, [speed]);
 
   // Auto-hide controls
   const resetHideTimer = useCallback(() => {
@@ -185,16 +208,18 @@ export const VideoPlayer = ({
   }, [playing, resetHideTimer]);
 
   const togglePlay = useCallback(() => {
-    if (!v) return;
-    if (v.paused) { v.play().catch(() => {}); setPlaying(true); }
-    else { v.pause(); setPlaying(false); }
-  }, [v]);
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (vid.paused) { vid.play().catch(() => {}); setPlaying(true); }
+    else { vid.pause(); setPlaying(false); }
+  }, []);
 
   const toggleMute = useCallback(() => {
-    if (!v) return;
-    v.muted = !v.muted;
-    setMuted(v.muted);
-  }, [v]);
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.muted = !vid.muted;
+    setMuted(vid.muted);
+  }, []);
 
   const toggleFullscreen = useCallback(async () => {
     const el = containerRef.current;
@@ -207,69 +232,76 @@ export const VideoPlayer = ({
   }, []);
 
   const togglePiP = useCallback(async () => {
-    if (!v) return;
+    const vid = videoRef.current;
+    if (!vid) return;
     try {
       if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else await v.requestPictureInPicture();
+      else await vid.requestPictureInPicture();
     } catch {}
-  }, [v]);
+  }, []);
 
   const cycleSpeed = useCallback((dir: number) => {
-    if (!v) return;
+    const vid = videoRef.current;
+    if (!vid) return;
     const idx = SPEEDS.indexOf(speed);
     const next = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, idx + dir))];
-    v.playbackRate = next;
+    vid.playbackRate = next;
     setSpeed(next);
-  }, [v, speed]);
+  }, [speed]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!v || !progressRef.current) return;
+    const vid = videoRef.current;
+    if (!vid || !progressRef.current) return;
     const rect = progressRef.current.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    v.currentTime = pct * (v.duration || 0);
-  }, [v]);
+    vid.currentTime = pct * (vid.duration || 0);
+  }, []);
 
   const handleProgressHover = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!progressRef.current || !v) return;
+    const vid = videoRef.current;
+    if (!progressRef.current || !vid) return;
     const rect = progressRef.current.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setSeekPreview(pct * (v.duration || 0));
-  }, [v]);
+    setSeekPreview(pct * (vid.duration || 0));
+  }, []);
 
   // Video events
   const onPlay = () => setPlaying(true);
   const onPause = () => setPlaying(false);
   const onTime = () => {
-    if (!v) return;
-    setCurrentTime(v.currentTime);
-    onTimeUpdate?.(v.currentTime);
+    const vid = videoRef.current;
+    if (!vid) return;
+    setCurrentTime(vid.currentTime);
+    onTimeUpdate?.(vid.currentTime);
   };
   const onDurationChange = () => {
-    if (v) setDuration(v.duration);
+    const vid = videoRef.current;
+    if (vid) setDuration(vid.duration);
   };
   const onProgress = () => {
-    if (!v || !v.buffered.length) return;
-    setBuffered(v.buffered.end(v.buffered.length - 1));
+    const vid = videoRef.current;
+    if (!vid || !vid.buffered.length) return;
+    setBuffered(vid.buffered.end(vid.buffered.length - 1));
   };
   const onWaiting = () => setBuffering(true);
   const onCanPlay = () => { setLoading(false); setBuffering(false); };
   const onLoadStart = () => setLoading(true);
   const onLoadedData = () => {
     setLoading(false);
-    if (v) {
-      setDuration(v.duration);
-      onLoadedMetadata?.(v.duration);
+    const vid = videoRef.current;
+    if (vid) {
+      setDuration(vid.duration);
+      onLoadedMetadata?.(vid.duration);
     }
   };
   const onVolumeChange = () => {
-    if (v) { setVolume(v.volume); setMuted(v.muted); }
+    const vid = videoRef.current;
+    if (vid) { setVolume(vid.volume); setMuted(vid.muted); }
   };
   const onEndedInternal = () => {
     setPlaying(false);
     onEnded?.();
   };
-  const onPiPEnter = () => setIsPiP(true);
-  const onPiPLeave = () => setIsPiP(false);
 
   const volumeIcon = muted || volume === 0
     ? <VolumeX size={18} />
@@ -383,14 +415,14 @@ export const VideoPlayer = ({
             </button>
 
             {/* Skip back 10s */}
-            <button onClick={() => { if (v) v.currentTime = Math.max(0, v.currentTime - 10); }}
+            <button onClick={() => { const vid = videoRef.current; if (vid) vid.currentTime = Math.max(0, vid.currentTime - 10); }}
               className="hidden sm:flex p-2 text-white/70 hover:text-white transition-colors rounded-xl hover:bg-white/10"
               title="Rewind 10s (J)">
               <SkipBack size={16} />
             </button>
 
             {/* Skip forward 10s */}
-            <button onClick={() => { if (v) v.currentTime = Math.min(duration, v.currentTime + 10); }}
+            <button onClick={() => { const vid = videoRef.current; if (vid) vid.currentTime = Math.min(duration, vid.currentTime + 10); }}
               className="hidden sm:flex p-2 text-white/70 hover:text-white transition-colors rounded-xl hover:bg-white/10"
               title="Forward 10s (L)">
               <SkipForward size={16} />
@@ -411,7 +443,8 @@ export const VideoPlayer = ({
                   value={muted ? 0 : volume}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value);
-                    if (v) { v.volume = val; v.muted = val === 0; }
+                    const vid = videoRef.current;
+                    if (vid) { vid.volume = val; vid.muted = val === 0; }
                     setVolume(val);
                     setMuted(val === 0);
                   }}
@@ -443,7 +476,8 @@ export const VideoPlayer = ({
                 <div className="absolute bottom-full right-0 mb-2 bg-[#1a1a22] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-30">
                   {SPEEDS.map(s => (
                     <button key={s} onClick={() => {
-                      if (v) v.playbackRate = s;
+                      const vid = videoRef.current;
+                      if (vid) vid.playbackRate = s;
                       setSpeed(s);
                       setShowSpeedMenu(false);
                     }}
