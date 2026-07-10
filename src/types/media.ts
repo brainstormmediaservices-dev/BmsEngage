@@ -43,6 +43,7 @@ export interface CommentReply {
   authorName: string;
   text: string;
   createdAt: string;
+  editedAt?: string;
 }
 
 export interface MediaComment {
@@ -50,17 +51,24 @@ export interface MediaComment {
   authorName: string;
   text: string;
   createdAt: string;
+  editedAt?: string;
+  mentions: string[];
+  slideIndex?: number;
   replies: CommentReply[];
   reactions: CommentReaction[];
 }
+
+export type CorrectionStatus = 'open' | 'in_progress' | 'resolved';
 
 export interface MediaCorrection {
   id: string;
   authorName: string;
   text: string;
   timestamp: string | null;
-  status: 'open' | 'resolved';
+  status: CorrectionStatus;
   createdAt: string;
+  mentions: string[];
+  slideIndex?: number;
 }
 
 export interface MediaAsset {
@@ -92,5 +100,72 @@ export interface MediaAsset {
   pendingShareWith: string[];
   viewLog: { ip: string; userAgent: string; viewedAt: string }[];
   editLog: { userId: string; name: string; email: string; accessedAt: string }[];
+  shareLog: ShareLogEntry[];
   deleteRequest: { requestedAt: string; acceptances: string[] } | null;
+  recipients: Recipients;
+  socialPosting: SocialPosting;
+  deliveryTracking: DeliveryRecord[];
+  auditLog: AuditLogEntry[];
+}
+
+export interface ShareLogEntry {
+  _id?: string;
+  startupId: string | null;
+  startupName: string;
+  ceoName: string;
+  whatsapp: string;
+  sharedBy: string;
+  sharedByUserId: string;
+  assetIds: string[];
+  assetTitles: string[];
+  message: string;
+  method: 'whatsapp' | 'email' | 'link';
+  sharedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AudienceType = 'ceo_only' | 'social_media_manager' | 'marketing_team' | 'brand_team' | 'specific' | 'everyone';
+
+export interface Recipients {
+  audienceType: AudienceType;
+  specificMemberIds: string[];
+}
+
+export interface SocialPosting {
+  platforms: string[];
+  caption: string;
+  hashtags: string;
+  callToAction: string;
+  scheduledDate: string | null;
+  postedDate: string | null;
+  postedBy: string;
+  postUrl: string;
+}
+
+export type DeliveryMethod = 'email' | 'whatsapp';
+export type DeliveryStatus = 'Pending' | 'Sent' | 'Delivered' | 'Opened' | 'Read' | 'Failed';
+
+export interface DeliveryRecord {
+  id: string;
+  recipientName: string;
+  recipientEmail: string;
+  recipientWhatsApp: string;
+  recipientRole: string;
+  method: DeliveryMethod;
+  status: DeliveryStatus;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  openedAt: string | null;
+  failedReason: string | null;
+}
+
+export type AuditAction = 'uploaded' | 'assigned' | 'notified' | 'viewed' | 'downloaded' | 'commented' | 'approved' | 'posted' | 'revised' | 'social_posting_updated' | 'marked_as_posted';
+
+export interface AuditLogEntry {
+  action: AuditAction;
+  performedBy: string;
+  performedByUserId: string | null;
+  details: string;
+  timestamp: string;
 }

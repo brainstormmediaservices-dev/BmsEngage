@@ -2,14 +2,14 @@ import * as React from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Upload, X, FileText, Image as ImageIcon, Film, Layers, Loader2, ChevronDown } from 'lucide-react';
-import { MediaCategory, MediaVisibility, MediaAsset } from '../../types/media';
+import { Upload, X, FileText, Image as ImageIcon, Film, Layers, Loader2, ChevronDown, Users, Share2 } from 'lucide-react';
+import { MediaCategory, MediaVisibility, MediaAsset, AudienceType } from '../../types/media';
 import { CATEGORIES, MAIN_CATEGORIES, detectMainCategory, detectSubcategory, type MainCategory } from '../../constants/mediaCategories';
 import { cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
 import { mediaService } from '../../services/mediaService';
 import { useAuth } from '../../contexts/AuthContext';
-import { Startup } from '../../services/startupService';
+import { Startup, TeamMember, startupService } from '../../services/startupService';
 import { StartupSelect } from './StartupSelect';
 import { CampaignEventSelect } from './CampaignEventSelect';
 
@@ -74,7 +74,22 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
     startupId: '',
     targetDate: '',
     campaignEventId: '',
+    audienceType: 'ceo_only' as AudienceType,
+    specificMemberIds: [] as string[],
+    socialPlatforms: [] as string[],
+    socialCaption: '',
+    socialHashtags: '',
+    socialCallToAction: '',
+    socialScheduledDate: '',
   });
+
+  const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>([]);
+
+  React.useEffect(() => {
+    if (formData.startupId && formData.audienceType === 'specific') {
+      startupService.listTeamMembers(formData.startupId).then(setTeamMembers).catch(() => setTeamMembers([]));
+    }
+  }, [formData.startupId, formData.audienceType]);
 
   const subcategoryOptions = CATEGORIES[formData.category] || [];
 
@@ -91,9 +106,16 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
           startupId: '',
           targetDate: parentAsset.targetDate ? parentAsset.targetDate.split('T')[0] : '',
           campaignEventId: (parentAsset as any).campaignEventId || '',
+          audienceType: 'ceo_only',
+          specificMemberIds: [],
+          socialPlatforms: [],
+          socialCaption: '',
+          socialHashtags: '',
+          socialCallToAction: '',
+          socialScheduledDate: '',
         });
       } else {
-        setFormData({ title: '', category: 'Graphics Design', subcategory: '', description: '', tags: '', visibility: 'Public', startupId: '', targetDate: propTargetDate || '', campaignEventId: campaignEventId || '' });
+        setFormData({ title: '', category: 'Graphics Design', subcategory: '', description: '', tags: '', visibility: 'Public', startupId: '', targetDate: propTargetDate || '', campaignEventId: campaignEventId || '', audienceType: 'ceo_only', specificMemberIds: [], socialPlatforms: [], socialCaption: '', socialHashtags: '', socialCallToAction: '', socialScheduledDate: '' });
       }
       setFiles([]);
       setUploadProgress(0);
@@ -181,6 +203,13 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
         const asset = await mediaService.uploadSingle(files[0], {
           ...formData,
           campaignEventId: campaignEventId || formData.campaignEventId || undefined,
+          socialPosting: formData.socialPlatforms.length > 0 ? {
+            platforms: formData.socialPlatforms,
+            caption: formData.socialCaption,
+            hashtags: formData.socialHashtags,
+            callToAction: formData.socialCallToAction,
+            scheduledDate: formData.socialScheduledDate || null,
+          } : undefined,
         } as any, setUploadProgress);
         onUpload(asset);
         toast('Media uploaded successfully!', 'success');
@@ -378,6 +407,131 @@ export const UploadMediaModal = ({ isOpen, onClose, onUpload, parentAsset, corre
                 onChange={id => setFormData({ ...formData, startupId: id })}
                 required
               />
+            </div>
+          )}
+
+          {isAgency && !parentAsset && formData.startupId && startupsEnabled && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                <Users size={14} />
+                Notify Recipients
+              </label>
+              <div className="relative">
+                <select
+                  value={formData.audienceType}
+                  onChange={(e) => setFormData({ ...formData, audienceType: e.target.value as AudienceType, specificMemberIds: [] })}
+                  className="w-full h-12 bg-background border border-border rounded-xl px-4 pr-10 text-sm text-text outline-none focus:border-primary/50 appearance-none transition-all"
+                >
+                  <option value="ceo_only">CEO Only</option>
+                  <option value="social_media_manager">Social Media Manager</option>
+                  <option value="marketing_team">Marketing Team</option>
+                  <option value="brand_team">Brand Team</option>
+                  <option value="specific">Specific Team Members</option>
+                  <option value="everyone">Everyone</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
+              </div>
+              <p className="text-[10px] text-text-muted">Choose who will be notified when this asset is uploaded</p>
+
+              {formData.audienceType === 'specific' && teamMembers.length > 0 && (
+                <div className="mt-3 p-3 bg-background border border-border rounded-xl space-y-2">
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-wider">Select Team Members</p>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {teamMembers.filter(m => m.isActive).map(member => (
+                      <label key={member._id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-primary/5 cursor-pointer transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={formData.specificMemberIds.includes(member._id!)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, specificMemberIds: [...formData.specificMemberIds, member._id!] });
+                            } else {
+                              setFormData({ ...formData, specificMemberIds: formData.specificMemberIds.filter(id => id !== member._id) });
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-text truncate">{member.name}</p>
+                          <p className="text-[10px] text-text-muted">{member.position} • {member.department}</p>
+                        </div>
+                        <span className="text-[10px] text-text-muted px-2 py-0.5 bg-card rounded-full">{member.notificationPreference}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isAgency && !parentAsset && formData.startupId && startupsEnabled && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                <Share2 size={14} />
+                Social Media Posting (Optional)
+              </label>
+              <div className="p-3 bg-background border border-border rounded-xl space-y-3">
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-text-muted">Platforms</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['Instagram', 'Facebook', 'Twitter/X', 'LinkedIn', 'TikTok', 'YouTube'].map(platform => (
+                      <button
+                        key={platform}
+                        type="button"
+                        onClick={() => {
+                          if (formData.socialPlatforms.includes(platform)) {
+                            setFormData({ ...formData, socialPlatforms: formData.socialPlatforms.filter(p => p !== platform) });
+                          } else {
+                            setFormData({ ...formData, socialPlatforms: [...formData.socialPlatforms, platform] });
+                          }
+                        }}
+                        className={cn(
+                          'px-3 py-1.5 rounded-lg text-xs font-bold border transition-all',
+                          formData.socialPlatforms.includes(platform)
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-card text-text-muted border-border hover:border-primary/50'
+                        )}
+                      >
+                        {platform}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {formData.socialPlatforms.length > 0 && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-text-muted">Caption</label>
+                      <textarea
+                        placeholder="Write your social media caption..."
+                        value={formData.socialCaption}
+                        onChange={(e) => setFormData({ ...formData, socialCaption: e.target.value })}
+                        className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 min-h-[60px] resize-none transition-all"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        label="Hashtags"
+                        placeholder="#brand #marketing"
+                        value={formData.socialHashtags}
+                        onChange={(e) => setFormData({ ...formData, socialHashtags: e.target.value })}
+                      />
+                      <Input
+                        label="Call to Action"
+                        placeholder="Learn More, Shop Now..."
+                        value={formData.socialCallToAction}
+                        onChange={(e) => setFormData({ ...formData, socialCallToAction: e.target.value })}
+                      />
+                    </div>
+                    <Input
+                      label="Scheduled Date (optional)"
+                      type="date"
+                      value={formData.socialScheduledDate}
+                      onChange={(e) => setFormData({ ...formData, socialScheduledDate: e.target.value })}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           )}
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, Plus, Eye, Edit2, Trash2, FileText, Image as ImageIcon, Film, Layers, Calendar, Share2, AlertCircle, Clock, Reply, Building2 } from 'lucide-react';
+import { MoreVertical, Plus, Eye, Edit2, Trash2, FileText, Image as ImageIcon, Film, Layers, Calendar, Share2, AlertCircle, Clock, Reply, Building2, Play } from 'lucide-react';
 import { MediaAsset } from '../../types/media';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -190,13 +190,17 @@ export const MediaAssetCard = ({
 
         {/* Overlay — desktop hover shows quick actions; click on card opens view */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm pointer-events-none">
-          <div className="p-2.5 bg-white/20 rounded-xl text-white">
-            <Eye size={20} />
-          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onView(asset); }}
+            className="pointer-events-auto p-3 bg-white/20 hover:bg-primary/40 rounded-2xl text-white transition-all hover:scale-110 shadow-lg z-10"
+            title="View Asset"
+          >
+            <Play size={24} fill="white" />
+          </button>
           {canUploadAsset && isUploader && (
             <button
               onClick={e => { e.stopPropagation(); onAddVariant(asset); }}
-              className="p-2.5 bg-primary hover:bg-primary-light rounded-xl text-white transition-all hover:scale-110 shadow-lg shadow-primary/40 pointer-events-auto"
+              className="pointer-events-auto p-2.5 bg-primary hover:bg-primary-light rounded-xl text-white transition-all hover:scale-110 shadow-lg shadow-primary/40"
               title="Add Variant"
             >
               <Plus size={20} />

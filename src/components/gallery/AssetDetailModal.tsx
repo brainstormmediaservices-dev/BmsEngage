@@ -5,15 +5,17 @@ import {
   FileText, Image as ImageIcon, Film, Calendar, User, Info,
   Download, Share2, History, ChevronDown, ChevronUp, ExternalLink,
   Clock, Maximize2, Edit2, MessageSquare, AlertCircle, CheckCircle2,
-  Trash2, Send, Loader2, Plus, Reply, Smile,
-} from 'lucide-react';import { MediaAsset, MediaVariant } from '../../types/media';
+  Trash2, Send, Loader2, Plus, Reply, Smile, AtSign, Check,
+  Share, Users, Activity, CheckCircle,
+} from 'lucide-react';import { MediaAsset, MediaVariant, CorrectionStatus, DeliveryRecord, AuditLogEntry } from '../../types/media';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from '../ui/Toast';
-import { addComment, deleteComment, addCorrection, resolveCorrection, deleteCorrection, replyToComment, reactToComment, approveAsset } from '../../services/mediaService';
+import { addComment, deleteComment, addCorrection, resolveCorrection, deleteCorrection, replyToComment, reactToComment, approveAsset, editComment, getTeamUsers, TeamUser, getDeliveryTracking, getAuditLog, markAsPosted } from '../../services/mediaService';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { VideoPlayer } from './VideoPlayer';
 
 interface AssetDetailModalProps {
   isOpen: boolean;
@@ -26,7 +28,7 @@ interface AssetDetailModalProps {
   onAddVariantForCorrection?: (asset: MediaAsset, correctionId: string) => void;
 }
 
-type RightTab = 'info' | 'comments' | 'corrections';
+type RightTab = 'info' | 'comments' | 'corrections' | 'social' | 'delivery' | 'audit';
 
 export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAssetUpdate, onAddVariantForCorrection }: AssetDetailModalProps) => {
   const [showMetadata, setShowMetadata] = React.useState(true);
@@ -49,8 +51,15 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
   const [replyText, setReplyText] = React.useState('');
   const [showEmojiFor, setShowEmojiFor] = React.useState<string | null>(null);
   const [approvingStatus, setApprovingStatus] = React.useState<'approved' | 'rejected' | null>(null);
+  const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = React.useState('');
   const { canComment, canRequestCorrection, canApproveAsset, canDeleteAsset, canUploadVersion } = usePermissions();
   const { user } = useAuth();
+
+  const [deliveryTracking, setDeliveryTracking] = React.useState<DeliveryRecord[]>([]);
+  const [auditLog, setAuditLog] = React.useState<AuditLogEntry[]>([]);
+  const [loadingDelivery, setLoadingDelivery] = React.useState(false);
+  const [loadingAudit, setLoadingAudit] = React.useState(false);
 
   const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '🎉'];
 
@@ -143,6 +152,17 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
     } catch { toast('Failed to delete comment', 'error'); }
   };
 
+  const handleEditComment = async (commentId: string) => {
+    if (!localAsset || !editingCommentText.trim()) return;
+    try {
+      const updated = await editComment(localAsset.id, commentId, editingCommentText.trim());
+      sync(updated);
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      toast('Comment edited', 'success');
+    } catch { toast('Failed to edit comment', 'error'); }
+  };
+
   const handleReplyToComment = async (commentId: string) => {
     if (!localAsset || !replyText.trim()) return;
     try {
@@ -211,7 +231,21 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
     { key: 'info', label: 'Info', icon: <Info size={14} /> },
     { key: 'comments', label: 'Comments', icon: <MessageSquare size={14} />, count: localAsset.comments?.length },
     { key: 'corrections', label: 'Revisions', icon: <AlertCircle size={14} />, count: localAsset.corrections?.filter(c => c.status === 'open').length },
+    { key: 'social', label: 'Social', icon: <Share size={14} /> },
+    { key: 'delivery', label: 'Delivery', icon: <Activity size={14} />, count: localAsset.deliveryTracking?.length },
+    { key: 'audit', label: 'Audit', icon: <CheckCircle size={14} /> },
   ];
+
+  React.useEffect(() => {
+    if (rightTab === 'delivery' && localAsset && deliveryTracking.length === 0) {
+      setLoadingDelivery(true);
+      getDeliveryTracking(localAsset.id).then(setDeliveryTracking).catch(() => {}).finally(() => setLoadingDelivery(false));
+    }
+    if (rightTab === 'audit' && localAsset && auditLog.length === 0) {
+      setLoadingAudit(true);
+      getAuditLog(localAsset.id).then(setAuditLog).catch(() => {}).finally(() => setLoadingAudit(false));
+    }
+  }, [rightTab, localAsset?.id]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={localAsset.title} maxWidth="max-w-6xl">
@@ -221,11 +255,11 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
         <div className="flex-1 space-y-6">
           <div ref={previewRef} className="relative aspect-video bg-black/40 rounded-3xl overflow-hidden border border-border group flex items-center justify-center">
             {localAsset.metadata?.mimeType?.startsWith('video/') ? (
-              <video src={activeVariant.url} controls className="w-full h-full object-contain" preload="metadata" />
+              <VideoPlayer src={activeVariant.url} className="w-full h-full rounded-3xl" />
             ) : (
               <img src={activeVariant.url} alt={activeVariant.title} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
             )}
-            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-20">
               <Button variant="outline" size="sm" onClick={handleFullscreen} className="bg-black/40 backdrop-blur-md border-white/10 hover:bg-black/60">
                 <Maximize2 size={16} className="mr-2" /> {isFullscreen ? 'Exit' : 'Fullscreen'}
               </Button>
@@ -470,8 +504,24 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                         className="p-3 bg-white/5 border border-white/10 rounded-2xl group">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">{c.authorName}</p>
-                            <p className="text-xs text-text leading-relaxed">{c.text}</p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-[10px] font-bold text-primary uppercase tracking-wider">{c.authorName}</p>
+                              {c.editedAt && <span className="text-[9px] text-text-muted italic">(edited)</span>}
+                            </div>
+                            {editingCommentId === c.id ? (
+                              <div className="flex gap-2 mt-1">
+                                <input value={editingCommentText}
+                                  onChange={e => setEditingCommentText(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleEditComment(c.id); } if (e.key === 'Escape') setEditingCommentId(null); }}
+                                  className="flex-1 bg-white/5 border border-primary/50 rounded-lg px-2 py-1 text-[11px] text-text outline-none"
+                                  autoFocus />
+                                <button onClick={() => handleEditComment(c.id)} className="p-1 bg-primary text-white rounded-lg text-[10px]">
+                                  <Check size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-text leading-relaxed">{c.text}</p>
+                            )}
 
                             {/* Reactions row */}
                             {Object.keys(reactionGroups).length > 0 && (
@@ -508,6 +558,12 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                                     className="text-[10px] text-text-muted hover:text-primary transition-colors flex items-center gap-1">
                                     <Reply size={10} /> Reply
                                   </button>
+                                  {c.authorName === user?.name && (
+                                    <button onClick={() => { setEditingCommentId(c.id); setEditingCommentText(c.text); }}
+                                      className="text-[10px] text-text-muted hover:text-primary transition-colors flex items-center gap-1">
+                                      <Edit2 size={10} /> Edit
+                                    </button>
+                                  )}
                                   <div className="relative">
                                     <button onClick={() => setShowEmojiFor(showEmojiFor === c.id ? null : c.id)}
                                       className="text-[10px] text-text-muted hover:text-primary transition-colors flex items-center gap-1">
@@ -547,10 +603,12 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                               </div>
                             )}
                           </div>
-                          <button onClick={() => handleDeleteComment(c.id)}
-                            className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 shrink-0">
-                            <Trash2 size={12} />
-                          </button>
+                          {c.authorName === user?.name && (
+                            <button onClick={() => handleDeleteComment(c.id)}
+                              className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 shrink-0">
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       </motion.div>
                     );
@@ -717,6 +775,163 @@ export const AssetDetailModal = ({ isOpen, onClose, asset, onEdit, onShare, onAs
                     {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Social Posting Tab */}
+          {rightTab === 'social' && (
+            <div className="bg-card border border-border rounded-3xl p-6 space-y-6 flex-1 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black text-text uppercase tracking-widest flex items-center gap-2">
+                  <Share size={14} className="text-primary" /> Social Media Posting
+                </h4>
+              </div>
+
+              {localAsset.socialPosting && localAsset.socialPosting.platforms.length > 0 ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Platforms</p>
+                    <div className="flex flex-wrap gap-2">
+                      {localAsset.socialPosting.platforms.map(platform => (
+                        <span key={platform} className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold">{platform}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {localAsset.socialPosting.caption && (
+                    <div>
+                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Caption</p>
+                      <p className="text-sm text-text leading-relaxed bg-background p-3 rounded-xl">{localAsset.socialPosting.caption}</p>
+                    </div>
+                  )}
+
+                  {localAsset.socialPosting.hashtags && (
+                    <div>
+                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Hashtags</p>
+                      <p className="text-sm text-primary">{localAsset.socialPosting.hashtags}</p>
+                    </div>
+                  )}
+
+                  {localAsset.socialPosting.callToAction && (
+                    <div>
+                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Call to Action</p>
+                      <span className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold">{localAsset.socialPosting.callToAction}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {localAsset.socialPosting.scheduledDate && (
+                      <div>
+                        <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Scheduled</p>
+                        <p className="text-sm text-text">{new Date(localAsset.socialPosting.scheduledDate).toLocaleDateString()}</p>
+                      </div>
+                    )}
+                    {localAsset.socialPosting.postedDate && (
+                      <div>
+                        <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Posted</p>
+                        <p className="text-sm text-green-400">{new Date(localAsset.socialPosting.postedDate).toLocaleDateString()}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {localAsset.socialPosting.postUrl && (
+                    <a href={localAsset.socialPosting.postUrl} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-primary text-xs font-bold hover:underline">
+                      <ExternalLink size={12} /> View Post
+                    </a>
+                  )}
+
+                  {localAsset.socialPosting.postedBy && (
+                    <p className="text-[10px] text-text-muted">Posted by {localAsset.socialPosting.postedBy}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Share size={32} className="text-text-muted mb-3 opacity-40" />
+                  <p className="text-xs text-text-muted">No social media posting info yet.</p>
+                  <p className="text-[10px] text-text-muted mt-1">Add social posting details when uploading an asset.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Delivery Tracking Tab */}
+          {rightTab === 'delivery' && (
+            <div className="bg-card border border-border rounded-3xl p-5 flex flex-col gap-4 flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-3 max-h-[400px] pr-1">
+                {loadingDelivery ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 size={20} className="animate-spin text-primary" />
+                  </div>
+                ) : deliveryTracking.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Activity size={32} className="text-text-muted mb-3 opacity-40" />
+                    <p className="text-xs text-text-muted">No delivery records yet.</p>
+                    <p className="text-[10px] text-text-muted mt-1">Delivery tracking will appear here when notifications are sent.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {deliveryTracking.map(record => (
+                      <div key={record.id} className="flex items-center gap-3 p-3 bg-background border border-border rounded-xl">
+                        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
+                          record.method === 'email' ? 'bg-blue-500/10 text-blue-500' : 'bg-emerald-500/10 text-emerald-500'
+                        )}>
+                          {record.method === 'email' ? '✉' : '💬'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-text truncate">{record.recipientName}</p>
+                          <p className="text-[10px] text-text-muted">{record.recipientRole} • {record.method}</p>
+                        </div>
+                        <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold",
+                          record.status === 'Delivered' || record.status === 'Opened' || record.status === 'Read'
+                            ? 'bg-green-500/10 text-green-400'
+                            : record.status === 'Failed'
+                            ? 'bg-red-500/10 text-red-400'
+                            : record.status === 'Sent'
+                            ? 'bg-blue-500/10 text-blue-400'
+                            : 'bg-yellow-500/10 text-yellow-400'
+                        )}>{record.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Audit Log Tab */}
+          {rightTab === 'audit' && (
+            <div className="bg-card border border-border rounded-3xl p-5 flex flex-col gap-4 flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-3 max-h-[400px] pr-1">
+                {loadingAudit ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 size={20} className="animate-spin text-primary" />
+                  </div>
+                ) : auditLog.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <CheckCircle size={32} className="text-text-muted mb-3 opacity-40" />
+                    <p className="text-xs text-text-muted">No audit entries yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {auditLog.map((entry, idx) => (
+                      <div key={idx} className="flex items-start gap-3 p-3 bg-background border border-border rounded-xl">
+                        <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-text leading-relaxed">
+                            <span className="font-bold text-primary">{entry.performedBy}</span>
+                            {' '}{entry.details}
+                          </p>
+                          <p className="text-[10px] text-text-muted mt-1">{new Date(entry.timestamp).toLocaleString()}</p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold shrink-0">
+                          {entry.action.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

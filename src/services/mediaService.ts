@@ -1,5 +1,5 @@
 import api from './api';
-import { MediaAsset } from '../types/media';
+import { MediaAsset, ShareLogEntry, SocialPosting, DeliveryRecord, AuditLogEntry, AudienceType } from '../types/media';
 
 export interface MediaFilters {
   category?: string;
@@ -29,6 +29,9 @@ export const mediaService = {
     startupId?: string;
     targetDate?: string;
     campaignEventId?: string;
+    audienceType?: AudienceType;
+    specificMemberIds?: string[];
+    socialPosting?: Partial<SocialPosting>;
   }, onProgress?: (pct: number) => void): Promise<MediaAsset> => {
     const data = new FormData();
     data.append('file', file);
@@ -41,6 +44,15 @@ export const mediaService = {
     if (formData.startupId) data.append('startupId', formData.startupId);
     if (formData.targetDate) data.append('targetDate', formData.targetDate);
     if (formData.campaignEventId) data.append('campaignEventId', formData.campaignEventId);
+    if (formData.audienceType) {
+      data.append('recipients', JSON.stringify({
+        audienceType: formData.audienceType,
+        specificMemberIds: formData.specificMemberIds || [],
+      }));
+    }
+    if (formData.socialPosting) {
+      data.append('socialPosting', JSON.stringify(formData.socialPosting));
+    }
 
     const res = await api.post('/media/upload', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -104,8 +116,13 @@ export const deleteVariant = async (mediaId: string, variantId: string): Promise
   return res.data.media;
 };
 
-export const addComment = async (mediaId: string, text: string): Promise<MediaAsset> => {
-  const res = await api.post(`/media/${mediaId}/comments`, { text });
+export const addComment = async (mediaId: string, text: string, mentions?: string[], slideIndex?: number): Promise<MediaAsset> => {
+  const res = await api.post(`/media/${mediaId}/comments`, { text, mentions, slideIndex });
+  return res.data.media;
+};
+
+export const editComment = async (mediaId: string, commentId: string, text: string): Promise<MediaAsset> => {
+  const res = await api.patch(`/media/${mediaId}/comments/${commentId}`, { text });
   return res.data.media;
 };
 
@@ -124,8 +141,13 @@ export const reactToComment = async (mediaId: string, commentId: string, emoji: 
   return res.data.media;
 };
 
-export const addCorrection = async (mediaId: string, text: string, timestamp?: string): Promise<MediaAsset> => {
-  const res = await api.post(`/media/${mediaId}/corrections`, { text, timestamp });
+export const addCorrection = async (mediaId: string, text: string, timestamp?: string, mentions?: string[], slideIndex?: number): Promise<MediaAsset> => {
+  const res = await api.post(`/media/${mediaId}/corrections`, { text, timestamp, mentions, slideIndex });
+  return res.data.media;
+};
+
+export const updateCorrectionStatus = async (mediaId: string, correctionId: string, status: 'open' | 'in_progress' | 'resolved'): Promise<MediaAsset> => {
+  const res = await api.patch(`/media/${mediaId}/corrections/${correctionId}/status`, { status });
   return res.data.media;
 };
 
@@ -203,4 +225,43 @@ export const getAgencyTeamMembers = async (): Promise<TeamUser[]> => {
 export const approveAsset = async (mediaId: string, status: 'approved' | 'rejected'): Promise<MediaAsset> => {
   const res = await api.patch(`/media/${mediaId}/approve`, { status });
   return res.data.media;
+};
+
+export const recordShareLog = async (payload: {
+  startupId?: string | null;
+  startupName?: string;
+  ceoName?: string;
+  whatsapp?: string;
+  assetIds: string[];
+  assetTitles: string[];
+  message?: string;
+  method?: 'whatsapp' | 'email' | 'link';
+}): Promise<void> => {
+  await api.post('/media/share-log', payload);
+};
+
+export const getShareLog = async (startupId?: string): Promise<ShareLogEntry[]> => {
+  const params = startupId ? `?startupId=${startupId}` : '';
+  const res = await api.get(`/media/share-log${params}`);
+  return res.data.logs;
+};
+
+export const updateSocialPosting = async (mediaId: string, data: Partial<SocialPosting>): Promise<MediaAsset> => {
+  const res = await api.patch(`/media/${mediaId}/social-posting`, data);
+  return res.data.media;
+};
+
+export const markAsPosted = async (mediaId: string, postUrl?: string, platform?: string): Promise<MediaAsset> => {
+  const res = await api.patch(`/media/${mediaId}/mark-posted`, { postUrl, platform });
+  return res.data.media;
+};
+
+export const getDeliveryTracking = async (mediaId: string): Promise<DeliveryRecord[]> => {
+  const res = await api.get(`/media/${mediaId}/delivery-tracking`);
+  return res.data.tracking;
+};
+
+export const getAuditLog = async (mediaId: string): Promise<AuditLogEntry[]> => {
+  const res = await api.get(`/media/${mediaId}/audit-log`);
+  return res.data.auditLog;
 };

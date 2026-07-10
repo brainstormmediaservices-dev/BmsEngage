@@ -11,10 +11,11 @@ import { AssetDetailModal } from '../components/gallery/AssetDetailModal';
 import { EditAssetModal } from '../components/gallery/EditAssetModal';
 import { DeleteAssetModal } from '../components/gallery/DeleteAssetModal';
 import { ShareAssetModal } from '../components/gallery/ShareAssetModal';
+import { WeeklyShareModal } from '../components/gallery/WeeklyShareModal';
 import { PresentationView } from '../components/gallery/PresentationView';
 import { useToast } from '../components/ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, ChevronLeft, ChevronRight, Monitor } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Monitor, MessageCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { usePermissions } from '../hooks/usePermissions';
 import { useAuth } from '../contexts/AuthContext';
@@ -81,6 +82,7 @@ export default function GalleryPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isWeeklyShareOpen, setIsWeeklyShareOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [parentForVariant, setParentForVariant] = useState<MediaAsset | undefined>(undefined);
@@ -88,7 +90,7 @@ export default function GalleryPage() {
   const [presentationOpen, setPresentationOpen] = useState(false);
   const [presentationIndex, setPresentationIndex] = useState(0);
 
-  const { canUploadAsset, isCreativeRole } = usePermissions();
+  const { canUploadAsset, isCreativeRole, isExecutive } = usePermissions();
 
   // Full presentation mode: agency context + executive/production/marketing roles
   const canPresent = isAgency && (() => {
@@ -257,6 +259,15 @@ export default function GalleryPage() {
                 <Monitor size={16} /> My Presentation
               </button>
             )}
+            {/* Share to WhatsApp button */}
+            {isExecutive && (
+              <button
+                onClick={() => setIsWeeklyShareOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#25D366] text-white font-bold text-sm shadow-lg shadow-[#25D366]/30 hover:bg-[#20bd5a] transition-all"
+              >
+                <MessageCircle size={16} /> Share to WhatsApp
+              </button>
+            )}
             {canPresent && thisWeekAssets.length > 0 && (
               <span className="text-xs text-text-muted">{thisWeekAssets.length} asset{thisWeekAssets.length !== 1 ? 's' : ''} this week</span>
             )}
@@ -416,6 +427,12 @@ export default function GalleryPage() {
           setMedia(prev => prev.map(m => m.id === updated.id ? updated : m));
           setSelectedAsset(updated);
         }}
+      />
+      <WeeklyShareModal
+        isOpen={isWeeklyShareOpen}
+        onClose={() => setIsWeeklyShareOpen(false)}
+        assets={media}
+        startups={startups}
       />
 
       {/* Presentation mode — full-screen overlay */}

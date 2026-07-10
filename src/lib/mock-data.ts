@@ -24,8 +24,13 @@ const baseMedia = {
   viewLog: [],
   editLog: [],
   deleteRequest: null,
+  shareLog: [],
   ownerId: 'user1',
   isOwner: true,
+  recipients: { audienceType: 'ceo_only' as const, specificMemberIds: [] },
+  socialPosting: { platforms: [] as string[], caption: '', hashtags: '', callToAction: '', scheduledDate: null, postedDate: null, postedBy: '', postUrl: '' },
+  deliveryTracking: [],
+  auditLog: [],
 };
 
 export const MOCK_MEDIA: MediaAsset[] = [

@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, Building2, X, Check, Loader2, Camera, Phone, Mail, MessageCircle } from 'lucide-react';
-import { startupService, Startup } from '../services/startupService';
+import { Plus, Pencil, Trash2, Building2, X, Check, Loader2, Camera, Phone, Mail, MessageCircle, Users, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { startupService, Startup, TeamMember } from '../services/startupService';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { cn } from '../lib/utils';
 
 import { AccessGuard } from '../components/AccessGuard';
 
@@ -15,7 +16,7 @@ function StartupsPageInner() {
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', phone: '', whatsapp: '', email: '' });
+  const [form, setForm] = useState({ name: '', description: '', phone: '', whatsapp: '', email: '', ceoName: '', ceoEmail: '', companyEmail: '' });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -24,6 +25,14 @@ function StartupsPageInner() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const [expandedStartupId, setExpandedStartupId] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [teamForm, setTeamForm] = useState({ name: '', position: '', department: '', email: '', whatsapp: '', notificationPreference: 'both' as 'email' | 'whatsapp' | 'both' });
+  const [savingMember, setSavingMember] = useState(false);
 
   const EXECUTIVE_ROLES = ['owner', 'ceo', 'coo', 'creative_director', 'head_of_production'];
   const isOwner = user?.activeContext === 'agency' && (
@@ -42,7 +51,7 @@ function StartupsPageInner() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ name: '', description: '', phone: '', whatsapp: '', email: '' });
+    setForm({ name: '', description: '', phone: '', whatsapp: '', email: '', ceoName: '', ceoEmail: '', companyEmail: '' });
     setLogoFile(null);
     setLogoPreview(null);
     setShowForm(true);
@@ -50,10 +59,85 @@ function StartupsPageInner() {
 
   const openEdit = (s: Startup) => {
     setEditingId(s.id);
-    setForm({ name: s.name, description: s.description, phone: s.phone, whatsapp: s.whatsapp, email: s.email });
+    setForm({ name: s.name, description: s.description, phone: s.phone, whatsapp: s.whatsapp, email: s.email, ceoName: s.ceoName || '', ceoEmail: s.ceoEmail || '', companyEmail: s.companyEmail || '' });
     setLogoFile(null);
     setLogoPreview(s.logo);
     setShowForm(true);
+  };
+
+  const toggleTeamMembers = async (startupId: string) => {
+    if (expandedStartupId === startupId) {
+      setExpandedStartupId(null);
+      setTeamMembers([]);
+      return;
+    }
+    setExpandedStartupId(startupId);
+    setLoadingTeam(true);
+    try {
+      const members = await startupService.listTeamMembers(startupId);
+      setTeamMembers(members);
+    } catch {
+      toast('Failed to load team members', 'error');
+      setTeamMembers([]);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  const openTeamForm = (member?: TeamMember) => {
+    if (member) {
+      setEditingMemberId(member._id!);
+      setTeamForm({
+        name: member.name,
+        position: member.position,
+        department: member.department,
+        email: member.email,
+        whatsapp: member.whatsapp,
+        notificationPreference: member.notificationPreference,
+      });
+    } else {
+      setEditingMemberId(null);
+      setTeamForm({ name: '', position: '', department: '', email: '', whatsapp: '', notificationPreference: 'both' });
+    }
+    setShowTeamForm(true);
+  };
+
+  const handleSaveTeamMember = async () => {
+    if (!expandedStartupId) return;
+    if (!teamForm.name.trim() || !teamForm.position.trim()) {
+      toast('Name and position are required', 'error');
+      return;
+    }
+    setSavingMember(true);
+    try {
+      if (editingMemberId) {
+        const updated = await startupService.updateTeamMember(expandedStartupId, editingMemberId, teamForm);
+        setTeamMembers(prev => prev.map(m => m._id === editingMemberId ? updated : m));
+        toast('Team member updated', 'success');
+      } else {
+        const created = await startupService.addTeamMember(expandedStartupId, teamForm as any);
+        setTeamMembers(prev => [...prev, created]);
+        toast('Team member added', 'success');
+      }
+      setShowTeamForm(false);
+      setEditingMemberId(null);
+      setTeamForm({ name: '', position: '', department: '', email: '', whatsapp: '', notificationPreference: 'both' });
+    } catch (err: any) {
+      toast(err?.response?.data?.error || 'Failed to save team member', 'error');
+    } finally {
+      setSavingMember(false);
+    }
+  };
+
+  const handleDeleteTeamMember = async (memberId: string) => {
+    if (!expandedStartupId) return;
+    try {
+      await startupService.removeTeamMember(expandedStartupId, memberId);
+      setTeamMembers(prev => prev.filter(m => m._id !== memberId));
+      toast('Team member removed', 'success');
+    } catch {
+      toast('Failed to remove team member', 'error');
+    }
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,6 +272,27 @@ function StartupsPageInner() {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider">CEO Name</label>
+                <input type="text" placeholder="John Doe" value={form.ceoName}
+                  onChange={e => setForm(f => ({ ...f, ceoName: e.target.value }))}
+                  className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider">CEO Email</label>
+                <input type="email" placeholder="ceo@startup.com" value={form.ceoEmail}
+                  onChange={e => setForm(f => ({ ...f, ceoEmail: e.target.value }))}
+                  className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 transition-all" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Company Email</label>
+                <input type="email" placeholder="info@startup.com" value={form.companyEmail}
+                  onChange={e => setForm(f => ({ ...f, companyEmail: e.target.value }))}
+                  className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm text-text placeholder:text-text-muted outline-none focus:border-primary/50 transition-all" />
+              </div>
+            </div>
+
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
                 <X size={16} className="mr-1" /> Cancel
@@ -220,7 +325,8 @@ function StartupsPageInner() {
       ) : (
         <div className="space-y-3">
           {startups.map(s => (
-            <motion.div key={s.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            <React.Fragment key={s.id}>
+            <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-4 bg-card border border-border rounded-2xl p-4 sm:p-5 hover:border-primary/30 transition-all">
               {/* Logo */}
               <div className="relative shrink-0 group/logo">
@@ -270,6 +376,10 @@ function StartupsPageInner() {
 
               {isOwner && (
                 <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => toggleTeamMembers(s.id)}
+                    className={cn("p-2 rounded-xl transition-all", expandedStartupId === s.id ? "text-primary bg-primary/10" : "text-text-muted hover:text-text hover:bg-white/5")}>
+                    <Users size={16} />
+                  </button>
                   <button onClick={() => openEdit(s)}
                     className="p-2 rounded-xl text-text-muted hover:text-text hover:bg-white/5 transition-all">
                     <Pencil size={16} />
@@ -281,9 +391,136 @@ function StartupsPageInner() {
                 </div>
               )}
             </motion.div>
+
+            {/* Team Members Section */}
+            <AnimatePresence>
+              {expandedStartupId === s.id && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden">
+                  <div className="bg-card/50 border border-border rounded-2xl p-4 space-y-3 ml-16">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-text uppercase tracking-widest flex items-center gap-2">
+                        <Users size={14} className="text-primary" /> Team Members
+                      </h4>
+                      <Button size="sm" onClick={() => openTeamForm()} className="h-8 px-3 rounded-lg text-xs">
+                        <UserPlus size={12} className="mr-1" /> Add Member
+                      </Button>
+                    </div>
+
+                    {loadingTeam ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 size={20} className="animate-spin text-primary" />
+                      </div>
+                    ) : teamMembers.length === 0 ? (
+                      <p className="text-xs text-text-muted text-center py-4">No team members yet. Add the first one!</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {teamMembers.map(member => (
+                          <div key={member._id} className="flex items-center gap-3 p-3 bg-background border border-border rounded-xl">
+                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                              {member.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-text truncate">{member.name}</p>
+                              <p className="text-[10px] text-text-muted">{member.position} • {member.department}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              {member.email && (
+                                <a href={`mailto:${member.email}`} className="p-1.5 rounded-lg hover:bg-primary/10 text-text-muted hover:text-primary transition-colors">
+                                  <Mail size={12} />
+                                </a>
+                              )}
+                              {member.whatsapp && (
+                                <a href={`https://wa.me/${member.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-text-muted hover:text-emerald-500 transition-colors">
+                                  <MessageCircle size={12} />
+                                </a>
+                              )}
+                              <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold",
+                                member.notificationPreference === 'both' ? 'bg-primary/10 text-primary' :
+                                member.notificationPreference === 'email' ? 'bg-blue-500/10 text-blue-500' :
+                                'bg-emerald-500/10 text-emerald-500'
+                              )}>
+                                {member.notificationPreference}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => openTeamForm(member)}
+                                className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-white/5 transition-all">
+                                <Pencil size={12} />
+                              </button>
+                              <button onClick={() => handleDeleteTeamMember(member._id!)}
+                                className="p-1.5 rounded-lg text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-all">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            </React.Fragment>
           ))}
         </div>
       )}
+
+      {/* Team Member Form Modal */}
+      <AnimatePresence>
+        {showTeamForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowTeamForm(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-card border border-border rounded-2xl p-6 w-full max-w-md space-y-4"
+              onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-black text-text uppercase tracking-widest">
+                {editingMemberId ? 'Edit Team Member' : 'Add Team Member'}
+              </h3>
+
+              <div className="space-y-3">
+                <Input label="Name *" placeholder="John Doe" value={teamForm.name}
+                  onChange={e => setTeamForm(f => ({ ...f, name: e.target.value }))} />
+                <Input label="Position *" placeholder="Marketing Manager" value={teamForm.position}
+                  onChange={e => setTeamForm(f => ({ ...f, position: e.target.value }))} />
+                <Input label="Department" placeholder="Marketing" value={teamForm.department}
+                  onChange={e => setTeamForm(f => ({ ...f, department: e.target.value }))} />
+                <Input label="Email" type="email" placeholder="john@startup.com" value={teamForm.email}
+                  onChange={e => setTeamForm(f => ({ ...f, email: e.target.value }))} />
+                <Input label="WhatsApp" placeholder="+1 234 567 8900" value={teamForm.whatsapp}
+                  onChange={e => setTeamForm(f => ({ ...f, whatsapp: e.target.value }))} />
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Notification Preference</label>
+                  <div className="relative">
+                    <select
+                      value={teamForm.notificationPreference}
+                      onChange={e => setTeamForm(f => ({ ...f, notificationPreference: e.target.value as any }))}
+                      className="w-full h-11 bg-background border border-border rounded-xl px-4 pr-10 text-sm text-text outline-none focus:border-primary/50 appearance-none transition-all"
+                    >
+                      <option value="both">Both (Email + WhatsApp)</option>
+                      <option value="email">Email Only</option>
+                      <option value="whatsapp">WhatsApp Only</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={15} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="outline" onClick={() => setShowTeamForm(false)} disabled={savingMember}>
+                  <X size={16} className="mr-1" /> Cancel
+                </Button>
+                <Button onClick={handleSaveTeamMember} isLoading={savingMember}>
+                  <Check size={16} className="mr-1" /> {editingMemberId ? 'Save Changes' : 'Add Member'}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
