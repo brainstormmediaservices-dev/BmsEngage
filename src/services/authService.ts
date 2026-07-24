@@ -14,12 +14,12 @@ export const ROLE_GROUPS: Record<string, UserRole[]> = {
 };
 
 export const PERMISSIONS: Record<string, string[]> = {
-  upload_asset:       ['creative'],
+  upload_asset:       ['creative', 'executive'],
   view_asset:         ['creative', 'production', 'marketing', 'executive'],
   comment:            ['creative', 'production', 'marketing', 'executive'],
   request_correction: ['production', 'marketing', 'executive'],
   approve_asset:      ['production', 'marketing', 'executive'],
-  upload_version:     ['creative'],
+  upload_version:     ['creative', 'executive'],
   delete_asset:       ['executive'],
 };
 
