@@ -14,6 +14,8 @@ import { MediaAsset } from '../../types/media';
 import { AssetDetailModal } from '../../components/gallery/AssetDetailModal';
 import { EditAssetModal } from '../../components/gallery/EditAssetModal';
 import { UploadMediaModal } from '../../components/gallery/UploadMediaModal';
+import WeeklyScheduleView from '../../components/dashboard/WeeklyScheduleView';
+import DailyScheduleView from '../../components/dashboard/DailyScheduleView';
 import { cn } from '../../lib/utils';
 import {
   startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, isThisWeek,
@@ -123,6 +125,12 @@ export default function CreativeDashboard() {
           </button>
         )}
       </div>
+
+      {/* Daily Schedule */}
+      <DailyScheduleView />
+
+      {/* Weekly Schedule */}
+      <WeeklyScheduleView />
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">

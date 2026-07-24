@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
+import { StarButton } from '../ui/StarButton';
 
 interface MediaCardProps {
   asset: MediaAsset;
@@ -94,6 +95,11 @@ export const MediaCard = ({ asset, onView, onEdit, onDelete, onShare, onAddVaria
         <div className="p-3 bg-white/20 rounded-2xl text-white">
           <Eye size={22} />
         </div>
+      </div>
+
+      {/* Star button — always visible in top-right */}
+      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <StarButton assetId={asset.id} size={18} className="bg-black/40 backdrop-blur-sm rounded-full" />
       </div>
 
       <div className="p-3 sm:p-4">

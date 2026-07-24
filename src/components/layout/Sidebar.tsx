@@ -2,7 +2,7 @@ import { NavLink, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Image as ImageIcon, Share2, PenTool,
   Calendar, BarChart3, Settings, Bell, MessageSquare,
-  ChevronLeft, ChevronRight, Building2, X, Flag, LogOut,
+  ChevronLeft, ChevronRight, Building2, X, Flag, LogOut, Presentation,
 } from 'lucide-react';
 import { Logo } from '../ui/Logo';
 import { useState, useEffect } from 'react';
@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { icon: MessageSquare,   label: 'Messages',        path: '/messages',        featureKey: null,             executiveOnly: true,  agencyOnly: true  },
   { icon: Flag,            label: 'Campaigns',       path: '/campaigns',       featureKey: null,             executiveOnly: true,  agencyOnly: true  },
   { icon: Building2,       label: 'Startups',        path: '/startups',        featureKey: null,             executiveOnly: true,  agencyOnly: true,  agencyFlag: 'enableStartups' },
+  { icon: Presentation,    label: 'Presentations',   path: '/presentations',   featureKey: null,             executiveOnly: true,  agencyOnly: false },
   { icon: Settings,        label: 'Settings',        path: '/settings',        featureKey: 'settings',       executiveOnly: false, agencyOnly: false },
 ] as const;
 

@@ -31,6 +31,8 @@ const baseMedia = {
   socialPosting: { platforms: [] as string[], caption: '', hashtags: '', callToAction: '', scheduledDate: null, postedDate: null, postedBy: '', postUrl: '' },
   deliveryTracking: [],
   auditLog: [],
+  uploadType: 'single' as const,
+  bundleItems: [],
 };
 
 export const MOCK_MEDIA: MediaAsset[] = [

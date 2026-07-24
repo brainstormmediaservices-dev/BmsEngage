@@ -20,6 +20,9 @@ import { EditAssetModal } from '../../components/gallery/EditAssetModal';
 import { DeleteAssetModal } from '../../components/gallery/DeleteAssetModal';
 import { ShareAssetModal } from '../../components/gallery/ShareAssetModal';
 import { UploadMediaModal } from '../../components/gallery/UploadMediaModal';
+import WeeklyScheduleView from '../../components/dashboard/WeeklyScheduleView';
+import DailyScheduleView from '../../components/dashboard/DailyScheduleView';
+import { AIRecommendationsPanel } from '../../components/presentation/AIRecommendationsPanel';
 import { cn } from '../../lib/utils';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import api from '../../services/api';
@@ -168,6 +171,12 @@ export default function ExecutiveDashboard() {
           <p className="text-sm text-text-muted">Here's your agency's performance at a glance.</p>
         </div>
       </div>
+
+      {/* Daily Schedule */}
+      <DailyScheduleView />
+
+      {/* Weekly Schedule */}
+      <WeeklyScheduleView />
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
@@ -318,6 +327,11 @@ export default function ExecutiveDashboard() {
               )}
             </div>
           </div>
+
+          {/* Best Picks — AI Recommended Assets */}
+          <AIRecommendationsPanel
+            onAssetClick={a => { setSelectedAsset(a); setIsDetailOpen(true); }}
+          />
         </div>
       </div>
 

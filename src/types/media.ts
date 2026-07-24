@@ -32,6 +32,16 @@ export interface MediaVariant {
   metadata: MediaMetadata;
 }
 
+export interface BundleItem {
+  _id: string;
+  title: string;
+  url: string;
+  publicId?: string;
+  metadata: MediaMetadata;
+  uploadedBy?: string;
+  order: number;
+}
+
 export interface CommentReaction {
   userId: string;
   authorName: string;
@@ -91,6 +101,8 @@ export interface MediaAsset {
   visibility: MediaVisibility;
   metadata: MediaMetadata;
   variants: MediaVariant[];
+  uploadType: 'single' | 'variant_set' | 'bundle';
+  bundleItems: BundleItem[];
   comments: MediaComment[];
   corrections: MediaCorrection[];
   uploadedBy: string;
