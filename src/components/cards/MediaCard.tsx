@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar, Eye, Edit2, Trash2, Plus, Share2, MoreVertical } from 'lucide-react';
+import { Calendar, Eye, Edit2, Trash2, Plus, Share2, MoreVertical, Play } from 'lucide-react';
 import { MediaAsset } from '../../types/media';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '../../contexts/AuthContext';
@@ -90,10 +90,10 @@ export const MediaCard = ({ asset, onView, onEdit, onDelete, onShare, onAddVaria
         )}
       </div>
 
-      {/* Hover overlay — shows Eye icon as hint */}
+      {/* Hover overlay — Play for video, Eye for image */}
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm pointer-events-none">
         <div className="p-3 bg-white/20 rounded-2xl text-white">
-          <Eye size={22} />
+          {asset.metadata?.mimeType?.startsWith('video/') ? <Play size={22} /> : <Eye size={22} />}
         </div>
       </div>
 

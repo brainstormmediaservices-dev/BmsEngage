@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, GripVertical, Trash2, Plus, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, GripVertical, Trash2, Plus, Search, ChevronDown, ChevronUp, LayoutGrid, List } from 'lucide-react';
 import { motion } from 'motion/react';
 import { presentationService, Presentation } from '../../services/presentationService';
 import { mediaService } from '../../services/mediaService';
@@ -24,6 +24,7 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
   const [showAssetPicker, setShowAssetPicker] = useState(false);
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [assetSearch, setAssetSearch] = useState('');
+  const [assetViewMode, setAssetViewMode] = useState<'list' | 'grid'>('grid');
   const [expandedSlide, setExpandedSlide] = useState<number | null>(null);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -239,12 +240,24 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
         {/* Asset picker modal */}
         {showAssetPicker && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-2xl w-full max-w-lg p-5 space-y-4">
+            <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-text">Select Assets</h3>
-                <button onClick={() => setShowAssetPicker(false)} className="p-1.5 text-text-muted hover:text-text">
-                  <X size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex bg-background border border-border rounded-lg overflow-hidden">
+                    <button onClick={() => setAssetViewMode('grid')}
+                      className={`p-1.5 transition-colors ${assetViewMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
+                      <LayoutGrid size={14} />
+                    </button>
+                    <button onClick={() => setAssetViewMode('list')}
+                      className={`p-1.5 transition-colors ${assetViewMode === 'list' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
+                      <List size={14} />
+                    </button>
+                  </div>
+                  <button onClick={() => setShowAssetPicker(false)} className="p-1.5 text-text-muted hover:text-text">
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -252,26 +265,59 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
                   className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50"
                   placeholder="Search assets..." />
               </div>
-              <div className="max-h-64 overflow-y-auto space-y-1">
-                {filteredAssets.map(a => (
-                  <label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer">
-                    <input type="checkbox" className="accent-primary" data-asset-id={a.id}
-                      onChange={e => {
-                        const cb = e.target as HTMLInputElement;
-                        // handled on submit
-                      }} />
-                    <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 shrink-0">
-                      <img src={a.url} alt="" className="w-full h-full object-cover" />
-                    </div>
-                    <span className="text-xs font-semibold text-text truncate">{a.title}</span>
-                    <span className="text-[10px] text-text-muted ml-auto shrink-0">{a.category}</span>
-                  </label>
-                ))}
-              </div>
+
+              {assetViewMode === 'grid' ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-80 overflow-y-auto pr-1">
+                  {filteredAssets.map(a => (
+                    <label key={a.id}
+                      className="group relative aspect-square rounded-xl overflow-hidden border-2 border-border hover:border-primary/50 cursor-pointer transition-all">
+                      <input type="checkbox" className="sr-only peer" data-asset-id={a.id} />
+                      {a.metadata?.mimeType?.startsWith('video/') ? (
+                        <video src={a.url} className="w-full h-full object-cover" muted />
+                      ) : (
+                        <img src={a.url} alt={a.title} className="w-full h-full object-cover" />
+                      )}
+                      <div className="absolute inset-0 bg-black/0 peer-checked:bg-primary/20 transition-colors" />
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded border border-white/40 bg-black/30 flex items-center justify-center opacity-0 peer-checked:opacity-100 transition-opacity">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <p className="text-[10px] font-semibold text-white truncate">{a.title}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
+                  {filteredAssets.map(a => (
+                    <label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer">
+                      <input type="checkbox" className="accent-primary" data-asset-id={a.id} />
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 shrink-0">
+                        {a.metadata?.mimeType?.startsWith('video/') ? (
+                          <video src={a.url} className="w-full h-full object-cover" muted />
+                        ) : (
+                          <img src={a.url} alt="" className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                      <span className="text-xs font-semibold text-text truncate">{a.title}</span>
+                      <span className="text-[10px] text-text-muted ml-auto shrink-0">{a.category}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
               <button
                 onClick={() => {
-                  const checked = document.querySelectorAll<HTMLInputElement>('.accent-primary:checked');
-                  const ids = Array.from(checked).map(cb => cb.closest('label')?.querySelector('[data-asset-id]')?.getAttribute('data-asset-id') || '').filter(Boolean);
+                  const checked = document.querySelectorAll<HTMLInputElement>(
+                    assetViewMode === 'grid' ? '.sr-only:checked' : '.accent-primary:checked'
+                  );
+                  const ids = Array.from(checked).map(cb => {
+                    return cb.closest('label')?.querySelector('[data-asset-id]')?.getAttribute('data-asset-id')
+                      || cb.getAttribute('data-asset-id')
+                      || '';
+                  }).filter(Boolean);
                   if (ids.length) addAssets(ids);
                 }}
                 className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
