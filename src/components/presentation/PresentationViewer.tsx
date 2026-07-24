@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, Maximize2, Minimize2, Download, Copy, Share2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Maximize2, Minimize2, Download, Copy, Share2, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { presentationService, Presentation } from '../../services/presentationService';
 import { mediaService } from '../../services/mediaService';
@@ -17,6 +17,7 @@ export const PresentationViewer = ({ presentationId, onClose }: PresentationView
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   useEffect(() => {
     presentationService.getOne(presentationId).then(async p => {
@@ -36,7 +37,10 @@ export const PresentationViewer = ({ presentationId, onClose }: PresentationView
     });
   }, [presentationId]);
 
-  const slides = presentation?.slides || [];
+  const allSlides = presentation?.slides || [];
+  const visibleSlides = allSlides.filter(s => !s.hidden);
+  const categories = ['All', ...new Set(visibleSlides.map(s => assetMap[s.assetId]?.category).filter(Boolean))] as string[];
+  const slides = categoryFilter === 'All' ? visibleSlides : visibleSlides.filter(s => assetMap[s.assetId]?.category === categoryFilter);
   const currentSlide = slides[currentIndex];
 
   const goNext = useCallback(() => {
@@ -110,6 +114,18 @@ export const PresentationViewer = ({ presentationId, onClose }: PresentationView
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {categories.length > 1 && (
+            <div className="relative mr-2">
+              <select
+                value={categoryFilter}
+                onChange={e => { setCategoryFilter(e.target.value); setCurrentIndex(0); }}
+                className="appearance-none pl-7 pr-3 py-1.5 bg-white/10 border border-white/10 rounded-xl text-[11px] font-semibold text-white/80 focus:outline-none focus:border-primary/50 cursor-pointer"
+              >
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <Filter size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+            </div>
+          )}
           <span className="text-[10px] text-white/50 font-medium mr-2">
             {currentIndex + 1} / {slides.length}
           </span>

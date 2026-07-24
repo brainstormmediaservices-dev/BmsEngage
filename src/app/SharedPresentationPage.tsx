@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download, ExternalLink, Play, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download, ExternalLink, Play, Calendar, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
@@ -40,6 +40,7 @@ export default function SharedPresentationPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   useEffect(() => {
     if (!token) return;
@@ -53,7 +54,9 @@ export default function SharedPresentationPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const slides = presentation?.slides || [];
+  const allSlides = presentation?.slides || [];
+  const categories = ['All', ...new Set(allSlides.map(s => s.asset?.category).filter(Boolean))] as string[];
+  const slides = categoryFilter === 'All' ? allSlides : allSlides.filter(s => s.asset?.category === categoryFilter);
   const currentSlide = slides[currentIndex];
 
   const goNext = useCallback(() => {
@@ -135,6 +138,18 @@ export default function SharedPresentationPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {categories.length > 1 && (
+              <div className="relative mr-2">
+                <select
+                  value={categoryFilter}
+                  onChange={e => { setCategoryFilter(e.target.value); setCurrentIndex(0); }}
+                  className="appearance-none pl-7 pr-3 py-1.5 bg-white/5 border border-border rounded-xl text-[11px] font-semibold text-text focus:outline-none focus:border-primary/50 cursor-pointer"
+                >
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <Filter size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+              </div>
+            )}
             {slides.length > 0 && (
               <span className="text-[10px] text-text-muted font-medium">
                 {currentIndex + 1} / {slides.length}

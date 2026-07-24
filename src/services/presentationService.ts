@@ -7,6 +7,7 @@ export interface PresentationSlide {
   bundleItemId: string | null;
   order: number;
   notes: string;
+  hidden: boolean;
 }
 
 export interface Presentation {
@@ -99,5 +100,9 @@ export const presentationService = {
   generateShareLink: async (id: string, email?: string): Promise<{ shareToken: string; shareUrl: string }> => {
     const res = await api.post(`/presentations/${id}/share`, { email });
     return res.data;
+  },
+  toggleSlideHidden: async (id: string, slideId: string): Promise<Presentation> => {
+    const res = await api.patch(`/presentations/${id}/slides/${slideId}/toggle-hidden`);
+    return res.data.presentation;
   },
 };

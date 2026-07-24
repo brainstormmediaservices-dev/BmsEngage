@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, GripVertical, Trash2, Plus, Search, ChevronDown, ChevronUp, LayoutGrid, List, Upload, FolderOpen, Film } from 'lucide-react';
+import { X, GripVertical, Trash2, Plus, Search, ChevronDown, ChevronUp, LayoutGrid, List, Upload, FolderOpen, Film, EyeOff, Eye } from 'lucide-react';
 import { motion } from 'motion/react';
 import { presentationService, Presentation } from '../../services/presentationService';
 import { mediaService } from '../../services/mediaService';
@@ -18,7 +18,7 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
   const [industry, setIndustry] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [slides, setSlides] = useState<{ assetId: string; asset?: MediaAsset; order: number; notes: string; id?: string }[]>([]);
+  const [slides, setSlides] = useState<{ assetId: string; asset?: MediaAsset; order: number; notes: string; id?: string; hidden?: boolean }[]>([]);
   const [loading, setLoading] = useState(!!presentationId);
   const [saving, setSaving] = useState(false);
   const [showAssetPicker, setShowAssetPicker] = useState(false);
@@ -47,7 +47,7 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
         setClient(p.client);
         setIndustry(p.industry);
         setTags(p.tags);
-        setSlides(p.slides.map(s => ({ assetId: s.assetId, order: s.order, notes: s.notes, id: s._id })));
+        setSlides(p.slides.map(s => ({ assetId: s.assetId, order: s.order, notes: s.notes, id: s._id, hidden: s.hidden })));
         setLoading(false);
       });
     }
@@ -113,6 +113,10 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
 
   const removeSlide = (idx: number) => {
     setSlides(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, order: i })));
+  };
+
+  const toggleHidden = (idx: number) => {
+    setSlides(prev => prev.map((s, i) => i === idx ? { ...s, hidden: !s.hidden } : s));
   };
 
   const handleDragEnd = () => {
@@ -281,7 +285,10 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
                   onDragEnter={() => { dragOverItem.current = idx; }}
                   onDragEnd={handleDragEnd}
                   onDragOver={e => e.preventDefault()}
-                  className="flex items-center gap-3 p-3 bg-background border border-border rounded-xl group cursor-grab active:cursor-grabbing">
+                  className={cn(
+                    "flex items-center gap-3 p-3 bg-background border border-border rounded-xl group cursor-grab active:cursor-grabbing transition-all",
+                    slide.hidden && "opacity-40"
+                  )}>
                   <GripVertical size={14} className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                   <span className="text-[10px] font-bold text-text-muted w-5 text-center">{idx + 1}</span>
                   <div className="w-10 h-10 rounded-lg bg-white/5 overflow-hidden shrink-0">
@@ -291,7 +298,15 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-text truncate">{slide.asset?.title || slide.assetId}</p>
+                    {slide.hidden && (
+                      <span className="text-[9px] font-bold text-amber-500">Hidden from viewers</span>
+                    )}
                   </div>
+                  <button onClick={(e) => { e.stopPropagation(); toggleHidden(idx); }}
+                    className="p-1 rounded-lg text-text-muted hover:text-amber-500 hover:bg-amber-500/10 transition-all"
+                    title={slide.hidden ? 'Show to viewers' : 'Hide from viewers'}>
+                    {slide.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </button>
                   <button onClick={() => removeSlide(idx)}
                     className="p-1 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition-all">
                     <Trash2 size={12} />
