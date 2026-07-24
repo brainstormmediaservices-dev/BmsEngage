@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Presentation, Star, Trash2, Edit2, Clock } from 'lucide-react';
+import { Plus, Presentation, Star, Trash2, Edit2, Clock, Share2, Link2, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { presentationService, Presentation as PresentationType } from '../services/presentationService';
 import { StarButton } from '../components/ui/StarButton';
@@ -14,6 +14,10 @@ export default function PresentationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [sharingId, setSharingId] = useState<string | null>(null);
+  const [shareLink, setShareLink] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
 
   const fetchPresentations = async () => {
     setLoading(true);
@@ -41,6 +45,26 @@ export default function PresentationsPage() {
       await presentationService.remove(id);
       setPresentations(prev => prev.filter(p => p._id !== id));
     } catch {}
+  };
+
+  const handleShare = async (id: string) => {
+    setSharingId(id);
+    setShareLink('');
+    setShareCopied(false);
+    setShareLoading(true);
+    try {
+      const result = await presentationService.generateShareLink(id);
+      setShareLink(`${window.location.origin}/presentations/shared/${result.shareToken}`);
+    } catch {} finally {
+      setShareLoading(false);
+    }
+  };
+
+  const copyShareLink = () => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   };
 
   if (viewingId) {
@@ -103,6 +127,13 @@ export default function PresentationsPage() {
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
+                    onClick={e => { e.stopPropagation(); handleShare(p._id); }}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-colors"
+                    title="Share presentation"
+                  >
+                    <Share2 size={14} />
+                  </button>
+                  <button
                     onClick={e => { e.stopPropagation(); setEditingId(p._id); setShowBuilder(true); }}
                     className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-white/5 transition-colors"
                   >
@@ -154,6 +185,55 @@ export default function PresentationsPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Share Modal */}
+      {sharingId && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setSharingId(null)}>
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-text flex items-center gap-2">
+                <Share2 size={18} className="text-primary" /> Share Presentation
+              </h3>
+              <button onClick={() => setSharingId(null)} className="p-1.5 text-text-muted hover:text-text">
+                <X size={16} />
+              </button>
+            </div>
+
+            {shareLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : shareLink ? (
+              <div className="space-y-3">
+                <p className="text-xs text-text-muted">Anyone with this link can view this presentation without logging in:</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-text truncate font-mono">
+                    {shareLink}
+                  </div>
+                  <button onClick={copyShareLink}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 ${
+                      shareCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-primary text-white hover:bg-primary/90'
+                    }`}>
+                    {shareCopied ? <><Check size={12} /> Copied</> : <><Link2 size={12} /> Copy</>}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <a href={shareLink} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 py-2 bg-white/5 text-text-muted rounded-xl text-xs font-semibold text-center hover:text-text transition-colors">
+                    Open in new tab
+                  </a>
+                  <a href={`https://wa.me/?text=${encodeURIComponent(shareLink)}`} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 py-2 bg-emerald-500/10 text-emerald-500 rounded-xl text-xs font-semibold text-center hover:bg-emerald-500/20 transition-colors">
+                    Share on WhatsApp
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted text-center py-4">Failed to generate link</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

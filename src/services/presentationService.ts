@@ -96,4 +96,8 @@ export const presentationService = {
     const res = await api.get('/presentations/recommendations/assets');
     return res.data;
   },
+  generateShareLink: async (id: string, email?: string): Promise<{ shareToken: string; shareUrl: string }> => {
+    const res = await api.post(`/presentations/${id}/share`, { email });
+    return res.data;
+  },
 };

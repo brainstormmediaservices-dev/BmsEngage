@@ -34,6 +34,7 @@ import StartupsPage from './app/StartupsPage';
 import CampaignEventsPage from './app/CampaignEventsPage';
 import MessagesPage from './app/MessagesPage';
 import PresentationsPage from './app/PresentationsPage';
+import SharedPresentationPage from './app/SharedPresentationPage';
 
 // Redirects /gallery/share/:id/edit → /gallery?editAsset=:id after login
 function GalleryEditRedirect() {
@@ -95,6 +96,9 @@ export default function App() {
 
             {/* Public shared asset view */}
             <Route path="/gallery/share/:id" element={<SharedAssetPage />} />
+
+            {/* Public shared presentation view */}
+            <Route path="/presentations/shared/:token" element={<SharedPresentationPage />} />
 
             {/* Edit link — requires login, redirects to gallery with asset open for variant upload */}
             <Route path="/gallery/share/:id/edit" element={
