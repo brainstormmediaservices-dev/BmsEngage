@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, GripVertical, Trash2, Plus, Search, ChevronDown, ChevronUp, LayoutGrid, List } from 'lucide-react';
+import { X, GripVertical, Trash2, Plus, Search, ChevronDown, ChevronUp, LayoutGrid, List, Upload, FolderOpen, Film } from 'lucide-react';
 import { motion } from 'motion/react';
 import { presentationService, Presentation } from '../../services/presentationService';
 import { mediaService } from '../../services/mediaService';
@@ -25,7 +25,16 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [assetSearch, setAssetSearch] = useState('');
   const [assetViewMode, setAssetViewMode] = useState<'list' | 'grid'>('grid');
+  const [pickerTab, setPickerTab] = useState<'gallery' | 'upload'>('gallery');
   const [expandedSlide, setExpandedSlide] = useState<number | null>(null);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('Graphics Design');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -58,6 +67,30 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
     }));
     setSlides(prev => [...prev, ...newSlides]);
     setShowAssetPicker(false);
+  };
+
+  const handleUploadAndAdd = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const asset = await mediaService.uploadSingle(uploadFile, {
+        title: uploadTitle || uploadFile.name.split('.')[0],
+        category: uploadCategory,
+        description: '',
+        tags: '',
+        visibility: 'Public',
+      }, pct => setUploadProgress(pct));
+      setSlides(prev => [...prev, { assetId: asset.id, order: prev.length, notes: '' }]);
+      setUploadFile(null);
+      setUploadTitle('');
+      setShowAssetPicker(false);
+    } catch (err) {
+      console.error('Upload failed', err);
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   const removeSlide = (idx: number) => {
@@ -195,12 +228,26 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-text">Slides ({slides.length})</h3>
-            <button
-              onClick={() => { loadAssets(); setShowAssetPicker(true); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 transition-colors"
-            >
-              <Plus size={14} /> Add Assets
-            </button>
+            <div className="relative" ref={addMenuRef}>
+              <button
+                onClick={() => setShowAddMenu(prev => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 transition-colors"
+              >
+                <Plus size={14} /> Add Assets
+              </button>
+              {showAddMenu && (
+                <div className="absolute right-0 mt-1 w-44 bg-card border border-border rounded-xl shadow-2xl z-20 overflow-hidden">
+                  <button onClick={() => { setShowAddMenu(false); loadAssets(); setShowAssetPicker(true); setPickerTab('gallery'); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-text hover:bg-white/5 transition-colors">
+                    <FolderOpen size={14} className="text-primary" /> From Gallery
+                  </button>
+                  <button onClick={() => { setShowAddMenu(false); setPickerTab('upload'); setShowAssetPicker(true); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-text hover:bg-white/5 transition-colors">
+                    <Upload size={14} className="text-emerald-500" /> From Computer
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {slides.length === 0 ? (
@@ -239,91 +286,181 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
 
         {/* Asset picker modal */}
         {showAssetPicker && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-5 space-y-4">
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAssetPicker(false)}>
+            <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-text">Select Assets</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-bold text-text">
+                    {pickerTab === 'gallery' ? 'Select from Gallery' : 'Upload from Computer'}
+                  </h3>
                   <div className="flex bg-background border border-border rounded-lg overflow-hidden">
-                    <button onClick={() => setAssetViewMode('grid')}
-                      className={`p-1.5 transition-colors ${assetViewMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
-                      <LayoutGrid size={14} />
+                    <button onClick={() => setPickerTab('gallery')}
+                      className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold transition-colors ${pickerTab === 'gallery' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
+                      <FolderOpen size={11} /> Gallery
                     </button>
-                    <button onClick={() => setAssetViewMode('list')}
-                      className={`p-1.5 transition-colors ${assetViewMode === 'list' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
-                      <List size={14} />
+                    <button onClick={() => setPickerTab('upload')}
+                      className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold transition-colors ${pickerTab === 'upload' ? 'bg-emerald-500/20 text-emerald-500' : 'text-text-muted hover:text-text'}`}>
+                      <Upload size={11} /> Upload
                     </button>
                   </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {pickerTab === 'gallery' && (
+                    <div className="flex bg-background border border-border rounded-lg overflow-hidden">
+                      <button onClick={() => setAssetViewMode('grid')}
+                        className={`p-1.5 transition-colors ${assetViewMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
+                        <LayoutGrid size={14} />
+                      </button>
+                      <button onClick={() => setAssetViewMode('list')}
+                        className={`p-1.5 transition-colors ${assetViewMode === 'list' ? 'bg-primary/20 text-primary' : 'text-text-muted hover:text-text'}`}>
+                        <List size={14} />
+                      </button>
+                    </div>
+                  )}
                   <button onClick={() => setShowAssetPicker(false)} className="p-1.5 text-text-muted hover:text-text">
                     <X size={16} />
                   </button>
                 </div>
               </div>
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input value={assetSearch} onChange={e => setAssetSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50"
-                  placeholder="Search assets..." />
-              </div>
 
-              {assetViewMode === 'grid' ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-80 overflow-y-auto pr-1">
-                  {filteredAssets.map(a => (
-                    <label key={a.id}
-                      className="group relative aspect-square rounded-xl overflow-hidden border-2 border-border hover:border-primary/50 cursor-pointer transition-all">
-                      <input type="checkbox" className="sr-only peer" data-asset-id={a.id} />
-                      {a.metadata?.mimeType?.startsWith('video/') ? (
-                        <video src={a.url} className="w-full h-full object-cover" muted />
-                      ) : (
-                        <img src={a.url} alt={a.title} className="w-full h-full object-cover" />
-                      )}
-                      <div className="absolute inset-0 bg-black/0 peer-checked:bg-primary/20 transition-colors" />
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded border border-white/40 bg-black/30 flex items-center justify-center opacity-0 peer-checked:opacity-100 transition-opacity">
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <p className="text-[10px] font-semibold text-white truncate">{a.title}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
+              {pickerTab === 'gallery' ? (
+                <>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <input value={assetSearch} onChange={e => setAssetSearch(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50"
+                      placeholder="Search assets..." />
+                  </div>
+
+                  {assetViewMode === 'grid' ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-80 overflow-y-auto pr-1">
+                      {filteredAssets.map(a => (
+                        <label key={a.id}
+                          className="group relative aspect-square rounded-xl overflow-hidden border-2 border-border hover:border-primary/50 cursor-pointer transition-all">
+                          <input type="checkbox" className="sr-only peer" data-asset-id={a.id} />
+                          {a.metadata?.mimeType?.startsWith('video/') ? (
+                            <video src={a.url} className="w-full h-full object-cover" muted />
+                          ) : (
+                            <img src={a.url} alt={a.title} className="w-full h-full object-cover" />
+                          )}
+                          <div className="absolute inset-0 bg-black/0 peer-checked:bg-primary/20 transition-colors" />
+                          <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded border border-white/40 bg-black/30 flex items-center justify-center opacity-0 peer-checked:opacity-100 transition-opacity">
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <p className="text-[10px] font-semibold text-white truncate">{a.title}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
+                      {filteredAssets.map(a => (
+                        <label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer">
+                          <input type="checkbox" className="accent-primary" data-asset-id={a.id} />
+                          <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 shrink-0">
+                            {a.metadata?.mimeType?.startsWith('video/') ? (
+                              <video src={a.url} className="w-full h-full object-cover" muted />
+                            ) : (
+                              <img src={a.url} alt="" className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                          <span className="text-xs font-semibold text-text truncate">{a.title}</span>
+                          <span className="text-[10px] text-text-muted ml-auto shrink-0">{a.category}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      const checked = document.querySelectorAll<HTMLInputElement>(
+                        assetViewMode === 'grid' ? '.sr-only:checked' : '.accent-primary:checked'
+                      );
+                      const ids = Array.from(checked).map(cb => {
+                        return cb.closest('label')?.querySelector('[data-asset-id]')?.getAttribute('data-asset-id')
+                          || cb.getAttribute('data-asset-id')
+                          || '';
+                      }).filter(Boolean);
+                      if (ids.length) addAssets(ids);
+                    }}
+                    className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+                  >
+                    Add Selected
+                  </button>
+                </>
               ) : (
-                <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
-                  {filteredAssets.map(a => (
-                    <label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer">
-                      <input type="checkbox" className="accent-primary" data-asset-id={a.id} />
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 shrink-0">
-                        {a.metadata?.mimeType?.startsWith('video/') ? (
-                          <video src={a.url} className="w-full h-full object-cover" muted />
-                        ) : (
-                          <img src={a.url} alt="" className="w-full h-full object-cover" />
-                        )}
+                /* Upload tab */
+                <div className="space-y-4">
+                  <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setUploadTitle(f.name.split('.')[0]); } }} />
+
+                  {!uploadFile ? (
+                    <button onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-12 border-2 border-dashed border-border hover:border-primary/50 rounded-2xl flex flex-col items-center gap-3 text-text-muted hover:text-primary transition-colors">
+                      <Upload size={28} />
+                      <div className="text-center">
+                        <p className="text-sm font-semibold">Click to browse files</p>
+                        <p className="text-[10px] text-text-muted mt-0.5">Images and videos up to 2GB</p>
                       </div>
-                      <span className="text-xs font-semibold text-text truncate">{a.title}</span>
-                      <span className="text-[10px] text-text-muted ml-auto shrink-0">{a.category}</span>
-                    </label>
-                  ))}
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 p-3 bg-background border border-border rounded-xl">
+                        {uploadFile.type.startsWith('video/') ? (
+                          <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                            <Film size={20} className="text-emerald-500" />
+                          </div>
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 shrink-0">
+                            <img src={URL.createObjectURL(uploadFile)} alt="" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-text truncate">{uploadFile.name}</p>
+                          <p className="text-[10px] text-text-muted">{(uploadFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                        </div>
+                        <button onClick={() => setUploadFile(null)} className="p-1 text-text-muted hover:text-red-500">
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 block">Title</label>
+                        <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)}
+                          className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50"
+                          placeholder="Asset title" />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 block">Category</label>
+                        <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)}
+                          className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50">
+                          {['Graphics Design', 'Social Media Content', 'Branding', 'Printing Design', 'Web & Digital Design', 'Marketing & Advertising Creatives', 'Presentation & Documents'].map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {uploading && (
+                        <div className="space-y-1">
+                          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+                          </div>
+                          <p className="text-[10px] text-text-muted text-center">Uploading... {uploadProgress}%</p>
+                        </div>
+                      )}
+
+                      <button onClick={handleUploadAndAdd} disabled={uploading || !uploadTitle.trim()}
+                        className="w-full py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors">
+                        {uploading ? 'Uploading...' : 'Upload & Add to Slides'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-
-              <button
-                onClick={() => {
-                  const checked = document.querySelectorAll<HTMLInputElement>(
-                    assetViewMode === 'grid' ? '.sr-only:checked' : '.accent-primary:checked'
-                  );
-                  const ids = Array.from(checked).map(cb => {
-                    return cb.closest('label')?.querySelector('[data-asset-id]')?.getAttribute('data-asset-id')
-                      || cb.getAttribute('data-asset-id')
-                      || '';
-                  }).filter(Boolean);
-                  if (ids.length) addAssets(ids);
-                }}
-                className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-              >
-                Add Selected
-              </button>
             </div>
           </div>
         )}
