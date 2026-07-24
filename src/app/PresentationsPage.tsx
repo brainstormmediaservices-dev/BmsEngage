@@ -125,7 +125,7 @@ export default function PresentationsPage() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                   <Presentation size={18} />
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 transition-opacity">
                   <button
                     onClick={e => { e.stopPropagation(); handleShare(p._id); }}
                     className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-colors"
@@ -206,12 +206,12 @@ export default function PresentationsPage() {
             ) : shareLink ? (
               <div className="space-y-3">
                 <p className="text-xs text-text-muted">Anyone with this link can view this presentation without logging in:</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-text truncate font-mono">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="flex-1 px-3 py-2 bg-background border border-border rounded-xl text-xs text-text truncate font-mono min-w-0">
                     {shareLink}
                   </div>
                   <button onClick={copyShareLink}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 ${
+                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 ${
                       shareCopied ? 'bg-emerald-500/10 text-emerald-500' : 'bg-primary text-white hover:bg-primary/90'
                     }`}>
                     {shareCopied ? <><Check size={12} /> Copied</> : <><Link2 size={12} /> Copy</>}

@@ -207,7 +207,7 @@ export const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
         <NavContent collapsed={isCollapsed} />
       </aside>
 
-      {/* ── Mobile drawer ────────────────────────────────────────────── */}
+      {/* ── Mobile drawer (hamburger) ────────────────────────────────── */}
       <AnimatePresence>
         {mobileOpen && (
           <>
@@ -236,6 +236,35 @@ export const Sidebar = ({ mobileOpen, onMobileClose }: SidebarProps) => {
           </>
         )}
       </AnimatePresence>
+
+      {/* ── Mobile bottom nav bar ─────────────────────────────────────── */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-[#0c0c10]/95 backdrop-blur-xl border-t border-white/10">
+        <div className="flex items-center justify-around px-1 py-1.5">
+          {[
+            { icon: LayoutDashboard, label: 'Home',     path: '/dashboard' },
+            { icon: ImageIcon,       label: 'Gallery',  path: '/gallery' },
+            { icon: Calendar,        label: 'Schedule', path: '/scheduler' },
+            { icon: Flag,            label: 'Campaigns', path: '/campaigns', agencyOnly: true },
+            { icon: Presentation,    label: 'Presentations', path: '/presentations' },
+            { icon: Settings,        label: 'Settings', path: '/settings' },
+          ].filter(item => {
+            if (item.agencyOnly && !isAgency) return false;
+            return true;
+          }).map(item => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => cn(
+                'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors min-w-0',
+                isActive ? 'text-primary' : 'text-text-muted'
+              )}
+            >
+              <item.icon size={20} />
+              <span className="text-[9px] font-semibold truncate">{item.label}</span>
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </>
   );
 };

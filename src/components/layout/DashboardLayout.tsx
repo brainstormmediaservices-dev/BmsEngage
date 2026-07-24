@@ -17,7 +17,7 @@ export const DashboardLayout = () => {
       {/* Main content — offset by sidebar width on desktop only */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-60 transition-all duration-300">
         <Header onMobileMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8 overflow-y-auto">
           <motion.div
             key={layoutKey}
             initial={{ opacity: 0, y: 10 }}
