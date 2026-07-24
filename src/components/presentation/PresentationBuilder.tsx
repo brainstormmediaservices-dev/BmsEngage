@@ -28,13 +28,14 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
   const [pickerTab, setPickerTab] = useState<'gallery' | 'upload'>('gallery');
   const [expandedSlide, setExpandedSlide] = useState<number | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCategory, setUploadCategory] = useState('Graphics Design');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_FILES = 10;
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -69,21 +70,38 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
     setShowAssetPicker(false);
   };
 
+  const addFilesToQueue = (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    const filtered = arr.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    setUploadFiles(prev => {
+      const combined = [...prev, ...filtered];
+      return combined.slice(0, MAX_FILES);
+    });
+  };
+
+  const removeUploadFile = (idx: number) => {
+    setUploadFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleUploadAndAdd = async () => {
-    if (!uploadFile) return;
+    if (!uploadFiles.length) return;
     setUploading(true);
     setUploadProgress(0);
     try {
-      const asset = await mediaService.uploadSingle(uploadFile, {
-        title: uploadTitle || uploadFile.name.split('.')[0],
-        category: uploadCategory,
-        description: '',
-        tags: '',
-        visibility: 'Public',
-      }, pct => setUploadProgress(pct));
-      setSlides(prev => [...prev, { assetId: asset.id, order: prev.length, notes: '' }]);
-      setUploadFile(null);
-      setUploadTitle('');
+      const total = uploadFiles.length;
+      for (let i = 0; i < total; i++) {
+        const file = uploadFiles[i];
+        const asset = await mediaService.uploadSingle(file, {
+          title: file.name.split('.')[0],
+          category: uploadCategory,
+          description: '',
+          tags: '',
+          visibility: 'Public',
+        }, () => {});
+        setSlides(prev => [...prev, { assetId: asset.id, order: prev.length, notes: '' }]);
+        setUploadProgress(Math.round(((i + 1) / total) * 100));
+      }
+      setUploadFiles([]);
       setShowAssetPicker(false);
     } catch (err) {
       console.error('Upload failed', err);
@@ -394,48 +412,67 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
               ) : (
                 /* Upload tab */
                 <div className="space-y-4">
-                  <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setUploadFile(f); setUploadTitle(f.name.split('.')[0]); } }} />
+                  <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
+                    onChange={e => { if (e.target.files) addFilesToQueue(e.target.files); e.target.value = ''; }} />
 
-                  {!uploadFile ? (
-                    <button onClick={() => fileInputRef.current?.click()}
-                      className="w-full py-12 border-2 border-dashed border-border hover:border-primary/50 rounded-2xl flex flex-col items-center gap-3 text-text-muted hover:text-primary transition-colors">
-                      <Upload size={28} />
-                      <div className="text-center">
-                        <p className="text-sm font-semibold">Click to browse files</p>
-                        <p className="text-[10px] text-text-muted mt-0.5">Images and videos up to 2GB</p>
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 p-3 bg-background border border-border rounded-xl">
-                        {uploadFile.type.startsWith('video/') ? (
-                          <div className="w-14 h-14 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                            <Film size={20} className="text-emerald-500" />
-                          </div>
-                        ) : (
-                          <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 shrink-0">
-                            <img src={URL.createObjectURL(uploadFile)} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-text truncate">{uploadFile.name}</p>
-                          <p className="text-[10px] text-text-muted">{(uploadFile.size / 1024 / 1024).toFixed(1)} MB</p>
-                        </div>
-                        <button onClick={() => setUploadFile(null)} className="p-1 text-text-muted hover:text-red-500">
-                          <X size={14} />
+                  {/* Drop zone */}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files) addFilesToQueue(e.dataTransfer.files); }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`w-full py-10 border-2 border-dashed rounded-2xl flex flex-col items-center gap-3 cursor-pointer transition-all ${
+                      dragOver ? 'border-primary bg-primary/5 scale-[1.01]' : 'border-border hover:border-primary/50 hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    <Upload size={28} className={dragOver ? 'text-primary' : 'text-text-muted'} />
+                    <div className="text-center">
+                      <p className={`text-sm font-semibold ${dragOver ? 'text-primary' : 'text-text-muted'}`}>
+                        {dragOver ? 'Drop files here' : 'Drag & drop or click to browse'}
+                      </p>
+                      <p className="text-[10px] text-text-muted mt-0.5">
+                        Images &amp; videos — up to {MAX_FILES} files at once
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* File list */}
+                  {uploadFiles.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                          {uploadFiles.length} / {MAX_FILES} files
+                        </p>
+                        <button onClick={() => setUploadFiles([])} className="text-[10px] text-text-muted hover:text-red-500 transition-colors">
+                          Clear all
                         </button>
                       </div>
-
-                      <div>
-                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 block">Title</label>
-                        <input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)}
-                          className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50"
-                          placeholder="Asset title" />
+                      <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                        {uploadFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center gap-2.5 p-2 bg-background border border-border rounded-xl group">
+                            {file.type.startsWith('video/') ? (
+                              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                <Film size={14} className="text-emerald-500" />
+                              </div>
+                            ) : (
+                              <div className="w-9 h-9 rounded-lg overflow-hidden bg-white/5 shrink-0">
+                                <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-semibold text-text truncate">{file.name}</p>
+                              <p className="text-[10px] text-text-muted">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+                            </div>
+                            <button onClick={() => removeUploadFile(idx)}
+                              className="p-1 rounded text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
 
                       <div>
-                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 block">Category</label>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 block">Category (for all)</label>
                         <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)}
                           className="w-full px-4 py-2 bg-background border border-border rounded-xl text-sm text-text focus:outline-none focus:border-primary/50">
                           {['Graphics Design', 'Social Media Content', 'Branding', 'Printing Design', 'Web & Digital Design', 'Marketing & Advertising Creatives', 'Presentation & Documents'].map(c => (
@@ -447,15 +484,15 @@ export const PresentationBuilder = ({ presentationId, onClose }: PresentationBui
                       {uploading && (
                         <div className="space-y-1">
                           <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+                            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
                           </div>
                           <p className="text-[10px] text-text-muted text-center">Uploading... {uploadProgress}%</p>
                         </div>
                       )}
 
-                      <button onClick={handleUploadAndAdd} disabled={uploading || !uploadTitle.trim()}
+                      <button onClick={handleUploadAndAdd} disabled={uploading || !uploadFiles.length}
                         className="w-full py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors">
-                        {uploading ? 'Uploading...' : 'Upload & Add to Slides'}
+                        {uploading ? 'Uploading...' : `Upload ${uploadFiles.length} Asset${uploadFiles.length > 1 ? 's' : ''} & Add to Slides`}
                       </button>
                     </div>
                   )}
