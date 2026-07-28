@@ -1,18 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Plus, Presentation, Star, Trash2, Edit2, Clock, Share2, Link2, Check, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Presentation, Trash2, Edit2, Clock, Share2, Link2, Check, X, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { presentationService, Presentation as PresentationType } from '../services/presentationService';
-import { StarButton } from '../components/ui/StarButton';
 import { PresentationBuilder } from '../components/presentation/PresentationBuilder';
-import { PresentationViewer } from '../components/presentation/PresentationViewer';
-import { cn } from '../lib/utils';
 
 export default function PresentationsPage() {
+  const navigate = useNavigate();
   const [presentations, setPresentations] = useState<PresentationType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [viewingId, setViewingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [shareLink, setShareLink] = useState('');
@@ -54,7 +52,7 @@ export default function PresentationsPage() {
     setShareLoading(true);
     try {
       const result = await presentationService.generateShareLink(id);
-      setShareLink(`${window.location.origin}/presentations/shared/${result.shareToken}`);
+      setShareLink(`${window.location.origin}/present/shared/${result.shareToken}`);
     } catch {} finally {
       setShareLoading(false);
     }
@@ -66,10 +64,6 @@ export default function PresentationsPage() {
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
   };
-
-  if (viewingId) {
-    return <PresentationViewer presentationId={viewingId} onClose={() => setViewingId(null)} />;
-  }
 
   return (
     <div className="space-y-6 pb-16">
@@ -119,17 +113,24 @@ export default function PresentationsPage() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               className="group bg-card border border-border rounded-2xl p-5 hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(124,58,237,0.15)] transition-all cursor-pointer"
-              onClick={() => setViewingId(p._id)}
+              onClick={() => navigate(`/present/${p._id}`)}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                   <Presentation size={18} />
                 </div>
-                <div className="flex gap-1 transition-opacity">
+                <div className="flex gap-1">
+                  <button
+                    onClick={e => { e.stopPropagation(); navigate(`/present/${p._id}`); }}
+                    className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                    title="Present"
+                  >
+                    <Play size={14} />
+                  </button>
                   <button
                     onClick={e => { e.stopPropagation(); handleShare(p._id); }}
                     className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-primary/10 transition-colors"
-                    title="Share presentation"
+                    title="Share"
                   >
                     <Share2 size={14} />
                   </button>

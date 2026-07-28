@@ -35,6 +35,8 @@ import CampaignEventsPage from './app/CampaignEventsPage';
 import MessagesPage from './app/MessagesPage';
 import PresentationsPage from './app/PresentationsPage';
 import SharedPresentationPage from './app/SharedPresentationPage';
+import PresentMode from './app/PresentMode';
+import SharedPresentMode from './app/SharedPresentMode';
 
 // Redirects /gallery/share/:id/edit → /gallery?editAsset=:id after login
 function GalleryEditRedirect() {
@@ -97,8 +99,11 @@ export default function App() {
             {/* Public shared asset view */}
             <Route path="/gallery/share/:id" element={<SharedAssetPage />} />
 
-            {/* Public shared presentation view */}
+            {/* Public shared presentation view (legacy) */}
             <Route path="/presentations/shared/:token" element={<SharedPresentationPage />} />
+
+            {/* Public shared presentation (new presentation mode) */}
+            <Route path="/present/shared/:token" element={<SharedPresentMode />} />
 
             {/* Edit link — requires login, redirects to gallery with asset open for variant upload */}
             <Route path="/gallery/share/:id/edit" element={
@@ -121,6 +126,9 @@ export default function App() {
               <Route path="/messages" element={<MessagesPage />} />
               <Route path="/presentations" element={<PresentationsPage />} />
             </Route>
+
+            {/* Presentation Mode — standalone fullscreen, no dashboard chrome */}
+            <Route path="/present/:id" element={<ProtectedRoute><PresentMode /></ProtectedRoute>} />
 
             {/* Superadmin Routes */}
             <Route element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}>
